@@ -70,21 +70,40 @@ public final class PlanFinder {
                     continue;
                 }
 
-                MiningPlan bare = new MiningPlan(target, pistonPos, extendDir, pushDir, torchPos, null);
-                MiningPlan supported = new MiningPlan(target, pistonPos, extendDir, pushDir, torchPos, torchPos.below());
-                for (MiningPlan candidate : List.of(bare, supported)) {
-                    Integer quality = quality(view, candidate);
-                    if (quality == null) {
-                        continue;
-                    }
-                    if (quality == 0) {
-                        return candidate;
-                    }
-                    if (byQuality[quality] == null) {
-                        byQuality[quality] = candidate;
-                    }
+                // Evaluated one at a time rather than through a list: this runs for every
+                // torch direction of every extend direction of every face, and the supported
+                // variant is never even built when the plain one is already perfect.
+                MiningPlan perfect = consider(view,
+                        new MiningPlan(target, pistonPos, extendDir, pushDir, torchPos, null), byQuality);
+                if (perfect != null) {
+                    return perfect;
+                }
+                perfect = consider(view,
+                        new MiningPlan(target, pistonPos, extendDir, pushDir, torchPos, torchPos.below()), byQuality);
+                if (perfect != null) {
+                    return perfect;
                 }
             }
+        }
+        return null;
+    }
+
+    /**
+     * Scores one candidate and files it under its quality.
+     *
+     * @return the candidate when it is perfect and the search can stop, otherwise {@code null}.
+     */
+    @Nullable
+    private static MiningPlan consider(WorldView view, MiningPlan candidate, MiningPlan[] byQuality) {
+        Integer quality = quality(view, candidate);
+        if (quality == null) {
+            return null;
+        }
+        if (quality == 0) {
+            return candidate;
+        }
+        if (byQuality[quality] == null) {
+            byQuality[quality] = candidate;
         }
         return null;
     }
@@ -98,22 +117,26 @@ public final class PlanFinder {
     static Integer quality(WorldView view, MiningPlan plan) {
         BlockPos extendPos = plan.extendPos();
 
+        // Every guard below must pass, so their order does not change the verdict — only how
+        // much work a doomed candidate costs. Line of sight is by far the dearest (a raycast per
+        // face of a position) and the search can evaluate hundreds of candidates in one tick, so
+        // it runs last, after the set lookups and the block-state and geometry checks.
         if (view.isOccupied(plan.pistonPos()) || view.isOccupied(plan.torchPos()) || view.isOccupied(extendPos)) {
             return null;
         }
         if (plan.supportPos() != null && view.isOccupied(plan.supportPos())) {
             return null;
         }
-        if (!reachableAndVisible(view, plan.pistonPos()) || !reachableAndVisible(view, plan.torchPos())) {
+        if (!view.isReplaceable(extendPos) || !view.isReplaceable(plan.torchPos())) {
             return null;
         }
-        if (plan.supportPos() != null && !reachableAndVisible(view, plan.supportPos())) {
+        if (!view.isReachable(plan.pistonPos()) || !view.isReachable(plan.torchPos())) {
+            return null;
+        }
+        if (plan.supportPos() != null && !view.isReachable(plan.supportPos())) {
             return null;
         }
         if (!view.canPlacePiston(plan.pistonPos())) {
-            return null;
-        }
-        if (!view.isReplaceable(extendPos) || !view.isReplaceable(plan.torchPos())) {
             return null;
         }
         if (plan.supportPos() == null) {
@@ -125,6 +148,12 @@ public final class PlanFinder {
             // there belongs to the player and must not be disturbed.
             return null;
         }
+        if (!view.isVisible(plan.pistonPos()) || !view.isVisible(plan.torchPos())) {
+            return null;
+        }
+        if (plan.supportPos() != null && !view.isVisible(plan.supportPos())) {
+            return null;
+        }
 
         if (view.hasSignal(plan.pistonPos())) {
             return 3;
@@ -133,10 +162,6 @@ public final class PlanFinder {
             return 2;
         }
         return plan.supportPos() != null ? 1 : 0;
-    }
-
-    private static boolean reachableAndVisible(WorldView view, BlockPos pos) {
-        return view.isReachable(pos) && view.isVisible(pos);
     }
 
     /**

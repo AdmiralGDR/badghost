@@ -20,6 +20,7 @@ final class FakeWorldView implements WorldView {
     private final Set<Direction> blockedPushDirs = new HashSet<>();
 
     private Vec3 eye = new Vec3(0.5D, 1.6D, 0.5D);
+    private int visibilityChecks;
 
     FakeWorldView eye(double x, double y, double z) {
         this.eye = new Vec3(x, y, z);
@@ -126,7 +127,13 @@ final class FakeWorldView implements WorldView {
 
     @Override
     public boolean isVisible(BlockPos pos) {
+        visibilityChecks++;
         return !invisible.contains(pos);
+    }
+
+    /** How many line-of-sight probes were asked for; a raycast each in the real world. */
+    int visibilityChecks() {
+        return visibilityChecks;
     }
 
     @Override

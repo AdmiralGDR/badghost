@@ -229,19 +229,26 @@ public final class InventoryHelper {
         return findInstaMineSlot(reference) != NO_SLOT;
     }
 
-    /** Brings the fastest usable tool into the main hand. */
+    /** Brings a tool that breaks a piston in one tick into the main hand. */
     public static boolean equipInstaMineTool(BlockPos reference) {
         int slot = findInstaMineSlot(reference);
         return slot != NO_SLOT && moveToMainHand(slot);
     }
 
     /**
-     * Finds the fastest slot that clears the threshold.
+     * Finds a slot whose tool breaks a piston in one tick.
      *
      * <p>Vanilla only computes destroy progress for whatever is in the main hand, so each
      * candidate is parked in the selected slot for the duration of one measurement. Nothing is
      * sent to the server and the original stack goes back by identity, so this is invisible
      * outside this method.</p>
+     *
+     * <p>Measuring is not free: {@code getDigSpeed} fires a {@code PlayerEvent.BreakSpeed} per
+     * call, and each measurement briefly shows other listeners an item the player is not really
+     * holding. So the held item is tried first and the search stops at the first tool that
+     * clears the bar — every tool that clears it breaks the piston in the same single tick, so
+     * there is nothing to gain by ranking them. Only the waived-check mode, which has no bar to
+     * clear, has to look at everything to pick the fastest.</p>
      */
     private static int findInstaMineSlot(BlockPos reference) {
         LocalPlayer player = ClientContext.getPlayer();
@@ -257,8 +264,15 @@ public final class InventoryHelper {
         }
         ItemStack held = inventory.getItem(probe);
 
-        // With the check waived, any tool will do and the fastest one is the best guess.
-        float required = BadghostConfig.SKIP_INSTAMINE_CHECK.get() ? 0F : INSTA_MINE_PROGRESS;
+        boolean requireThreshold = !BadghostConfig.SKIP_INSTAMINE_CHECK.get();
+        // During an operation the pickaxe is already in hand, so this answers almost every call
+        // with a single measurement instead of walking the whole inventory.
+        if (requireThreshold && !held.isEmpty()
+                && pistonProgress(player, level, reference) >= INSTA_MINE_PROGRESS) {
+            return probe;
+        }
+
+        float required = requireThreshold ? INSTA_MINE_PROGRESS : 0F;
 
         int best = NO_SLOT;
         float bestProgress = 0F;
@@ -275,12 +289,17 @@ public final class InventoryHelper {
                 }
                 inventory.setItem(probe, candidate);
                 float progress = pistonProgress(player, level, reference);
-                if (progress >= required && progress > bestProgress) {
+                if (requireThreshold) {
+                    if (progress >= required) {
+                        return slot;
+                    }
+                } else if (progress > bestProgress) {
                     bestProgress = progress;
                     best = slot;
                 }
             }
         } finally {
+            // Runs on the early return above too, so the probe slot is always put back.
             inventory.setItem(probe, held);
         }
         return best;
@@ -315,35 +334,53 @@ public final class InventoryHelper {
         }
     }
 
-    /** Puts back the hotbar slot and the off-hand item the player had before the mod ran. */
-    public static void restoreHeld() {
+    /**
+     * Puts back the hotbar slot and the off-hand item the player had before the mod ran.
+     *
+     * <p>Returns {@code false} when the off hand could not be handed back yet — a swap needs the
+     * survival inventory menu, so it fails while any screen is open. The remembered item is then
+     * kept so a later call can finish the job; dropping it here would silently cost the player
+     * whatever they were carrying.</p>
+     */
+    public static boolean restoreHeld() {
+        boolean complete = true;
         if (offhandBorrowed) {
-            restoreOffhand();
-            offhandBorrowed = false;
-            rememberedOffhand = ItemStack.EMPTY;
+            if (restoreOffhand()) {
+                offhandBorrowed = false;
+                rememberedOffhand = ItemStack.EMPTY;
+            } else {
+                complete = false;
+            }
         }
         if (rememberedHotbarSlot != NO_SLOT) {
             setSelectedSlot(rememberedHotbarSlot);
             rememberedHotbarSlot = NO_SLOT;
         }
+        return complete;
     }
 
-    private static void restoreOffhand() {
+    /** @return {@code true} once the off hand holds what it held before the mod borrowed it. */
+    private static boolean restoreOffhand() {
         LocalPlayer player = ClientContext.getPlayer();
         if (player == null) {
-            return;
+            return false;
         }
         if (rememberedOffhand.isEmpty()) {
             // Nothing was there before: hand whatever the mod parked back to the inventory.
-            if (!player.getOffhandItem().isEmpty()) {
-                swap(OFFHAND_INVENTORY_INDEX, player.getInventory().getSuitableHotbarSlot());
+            if (player.getOffhandItem().isEmpty()) {
+                return true;
             }
-            return;
+            return swap(OFFHAND_INVENTORY_INDEX, player.getInventory().getSuitableHotbarSlot());
+        }
+        if (player.getOffhandItem().is(rememberedOffhand.getItem())) {
+            return true;
         }
         int slot = findSlot(player.getInventory(), rememberedOffhand.getItem());
-        if (slot != NO_SLOT) {
-            swap(slot, OFFHAND_INVENTORY_INDEX);
+        if (slot == NO_SLOT) {
+            // The item is gone from the inventory entirely; nothing left to put back.
+            return true;
         }
+        return swap(slot, OFFHAND_INVENTORY_INDEX);
     }
 
     /** Drops all remembered state; used when the world goes away. */

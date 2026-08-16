@@ -20,6 +20,16 @@ public final class MinerHUD implements LayeredDraw.Layer {
     private static final int LINE_HEIGHT = 12;
     private static final int TEXT_COLOR = 0xFFFFFF;
 
+    /**
+     * Ticks between checklist rebuilds. Building it walks the whole inventory several times and
+     * probes every slot for mining speed, which must not happen once per frame; half a second of
+     * staleness on an informational line is imperceptible.
+     */
+    private static final int CHECKLIST_REFRESH_TICKS = 10;
+
+    private static Component cachedChecklist;
+    private static long checklistBuiltAt = Long.MIN_VALUE;
+
     @Override
     public void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
         if (!ModState.isAutomationEnabled()) {
@@ -54,7 +64,17 @@ public final class MinerHUD implements LayeredDraw.Layer {
 
         // While idle, the checklist is the only way to see why a click does nothing.
         if (current == null) {
-            guiGraphics.drawString(mc.font, MinerRequirements.describeChecklist(null), MARGIN, y, TEXT_COLOR, true);
+            guiGraphics.drawString(mc.font, checklist(mc), MARGIN, y, TEXT_COLOR, true);
         }
+    }
+
+    /** Rebuilds the requirement checklist at most every {@link #CHECKLIST_REFRESH_TICKS}. */
+    private static Component checklist(Minecraft mc) {
+        long now = mc.level == null ? 0L : mc.level.getGameTime();
+        if (cachedChecklist == null || now - checklistBuiltAt >= CHECKLIST_REFRESH_TICKS || now < checklistBuiltAt) {
+            cachedChecklist = MinerRequirements.describeChecklist(null);
+            checklistBuiltAt = now;
+        }
+        return cachedChecklist;
     }
 }

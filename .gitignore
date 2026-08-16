@@ -24,3 +24,6 @@ run-mp
 
 # Third-party reference repos, not part of this mod
 example/
+
+# Release artifacts: built jar, hashes, signatures, timestamp proofs
+dist/

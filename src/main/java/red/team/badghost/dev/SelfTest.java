@@ -51,8 +51,22 @@ public final class SelfTest {
     private static final int SETTLE_TICKS = 60;
     private static final int WATCH_LIMIT_TICKS = 600;
 
-    /** One end-to-end case: a geometry, a mode and the block that must vanish. */
-    private record Scenario(String name, PlanMode mode, BlockPos target, Consumer<ClientPacketListener> build) {}
+    /**
+     * One end-to-end case: a geometry, a mode and the block that must vanish. When
+     * {@code abortMidway} is set the miner is disarmed while it is working instead, and the case
+     * passes only if it collected everything it had placed.
+     */
+    private record Scenario(String name, PlanMode mode, BlockPos target,
+                            Consumer<ClientPacketListener> build, boolean abortMidway) {
+        Scenario(String name, PlanMode mode, BlockPos target, Consumer<ClientPacketListener> build) {
+            this(name, mode, target, build, false);
+        }
+    }
+
+    /** Blocks the mod places; none may survive an abort. */
+    private static final List<net.minecraft.world.level.block.Block> MECHANISM = List.of(
+            Blocks.PISTON, Blocks.STICKY_PISTON, Blocks.MOVING_PISTON,
+            Blocks.REDSTONE_TORCH, Blocks.REDSTONE_WALL_TORCH, Blocks.SLIME_BLOCK);
 
     /** The ceiling target sits above head height; VERTICAL_FAST must plan the piston below it. */
     private static final BlockPos CEILING_TARGET = new BlockPos(OX, FLOOR_Y + 3, OZ);
@@ -63,7 +77,9 @@ public final class SelfTest {
             new Scenario("all-direction-sideways", PlanMode.ALL_DIRECTION, new BlockPos(OX, FLOOR_Y, OZ),
                     SelfTest::buildSideways),
             new Scenario("nether-roof-ceiling", PlanMode.VERTICAL_FAST, CEILING_TARGET,
-                    SelfTest::buildCeiling));
+                    SelfTest::buildCeiling),
+            new Scenario("abort-leaves-nothing", PlanMode.VERTICAL_FAST, new BlockPos(OX, FLOOR_Y, OZ),
+                    SelfTest::buildFloor, true));
 
     private enum Phase { WAIT_WORLD, EQUIP, BUILD, ARM, WATCH, NEXT, DONE }
 
@@ -74,6 +90,7 @@ public final class SelfTest {
     private static String lastState = "";
     private static boolean offhandChecked;
     private static boolean allPassed = true;
+    private static boolean abortIssued;
 
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
@@ -146,6 +163,7 @@ public final class SelfTest {
         Scenario s = current();
         LOGGER.info("{}: --- scenario '{}' ({}) target {} ---", TAG, s.name(), s.mode(), s.target());
         watchTicks = 0;
+        abortIssued = false;
         lastState = "";
         connection.sendCommand("gamemode creative");
         s.build().accept(connection);
@@ -260,6 +278,11 @@ public final class SelfTest {
             LOGGER.info("{}: state={}", TAG, lastState);
         }
 
+        if (current().abortMidway()) {
+            watchAbort(level, task);
+            return;
+        }
+
         if (!level.getBlockState(current().target()).is(Blocks.BEDROCK)) {
             LOGGER.info("{}: scenario '{}' PASS — bedrock removed", TAG, current().name());
             ModState.setAutomationEnabled(false);
@@ -273,6 +296,54 @@ public final class SelfTest {
         if (watchTicks > WATCH_LIMIT_TICKS) {
             fail("timed out after " + watchTicks + " ticks in state " + lastState);
         }
+    }
+
+    /**
+     * Disarms the miner once it has actually built something, then requires the world to be
+     * clean: an abort must roll the mechanism back, not abandon it next to the target.
+     */
+    private static void watchAbort(ClientLevel level, MinerTask task) {
+        if (!abortIssued) {
+            // Wait until hardware is really in the world before pulling the plug.
+            if (task == null || countMechanismBlocks(level) == 0) {
+                if (watchTicks > WATCH_LIMIT_TICKS) {
+                    fail("nothing was ever placed, cannot test the abort path");
+                }
+                return;
+            }
+            LOGGER.info("{}: {} mechanism block(s) placed, disarming mid-operation",
+                    TAG, countMechanismBlocks(level));
+            abortIssued = true;
+            ModState.setAutomationEnabled(false);
+            return;
+        }
+
+        if (AutomationEngine.getQueueSize() > 0) {
+            if (watchTicks > WATCH_LIMIT_TICKS) {
+                fail("queue did not drain after the abort");
+            }
+            return;
+        }
+
+        int leftovers = countMechanismBlocks(level);
+        if (leftovers > 0) {
+            fail(leftovers + " mechanism block(s) left in the world after the abort");
+            return;
+        }
+        LOGGER.info("{}: scenario '{}' PASS — abort left nothing behind", TAG, current().name());
+        phase = Phase.NEXT;
+    }
+
+    /** Counts the mod's own hardware around the target. */
+    private static int countMechanismBlocks(ClientLevel level) {
+        BlockPos target = current().target();
+        int found = 0;
+        for (BlockPos pos : BlockPos.betweenClosed(target.offset(-3, -3, -3), target.offset(3, 3, 3))) {
+            if (MECHANISM.contains(level.getBlockState(pos).getBlock())) {
+                found++;
+            }
+        }
+        return found;
     }
 
     // -- verdict --

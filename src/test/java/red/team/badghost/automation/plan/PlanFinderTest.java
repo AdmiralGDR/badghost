@@ -186,6 +186,39 @@ class PlanFinderTest {
     }
 
     @Test
+    @DisplayName("a candidate rejected on a cheap check never costs a line-of-sight probe")
+    void cheapRejectionSkipsVisibility() {
+        BlockPos piston = TARGET.above();
+        BlockPos torch = piston.east();
+        // The torch cell is solid, so the candidate dies on a block-state lookup. Visibility is
+        // a raycast per face in the real world and the search runs hundreds of candidates per
+        // click, so it must never be reached for a candidate already known to be unusable.
+        FakeWorldView view = new FakeWorldView()
+                .fill(-4, -4, -4, 4, 0, 4)
+                .eye(0.5D, 2.6D, 3.5D)
+                .solid(torch);
+
+        MiningPlan plan = new MiningPlan(TARGET, piston, Direction.UP, Direction.DOWN, torch, null);
+
+        assertNull(PlanFinder.quality(view, plan));
+        assertEquals(0, view.visibilityChecks(), "line of sight was probed for a doomed candidate");
+    }
+
+    @Test
+    @DisplayName("a usable candidate still gets its line of sight checked")
+    void viableCandidateIsStillVerified() {
+        FakeWorldView view = new FakeWorldView()
+                .fill(-4, -4, -4, 4, 0, 4)
+                .eye(0.5D, 2.6D, 3.5D);
+
+        BlockPos piston = TARGET.above();
+        MiningPlan plan = new MiningPlan(TARGET, piston, Direction.UP, Direction.DOWN, piston.east(), null);
+
+        assertEquals(0, PlanFinder.quality(view, plan));
+        assertTrue(view.visibilityChecks() > 0, "a surviving candidate must be sight-checked");
+    }
+
+    @Test
     @DisplayName("face ordering keeps the nearest face for last")
     void faceOrderingRotatesNearestToTheBack() {
         // Eye far to the east, so EAST is nearest and WEST is farthest.

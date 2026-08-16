@@ -53,6 +53,9 @@ public final class MinerTask {
     /** Hard ceiling on a task's lifetime, so a stuck target cannot wedge the queue. */
     private static final int MAX_TOTAL_TICKS = 400;
 
+    /** Extra ticks granted after a timeout purely to collect what was already placed. */
+    private static final int CLEANUP_GRACE_TICKS = 60;
+
     private final BlockPos target;
     private final BlockState originalState;
     private final Deque<BlockPos> recycleQueue = new ArrayDeque<>(4);
@@ -67,6 +70,7 @@ public final class MinerTask {
     private boolean chargeRotated;
     private boolean toolSettled;
     private boolean succeeded;
+    private boolean aborted;
 
     @Nullable
     private MiningPlan plan;
@@ -105,6 +109,28 @@ public final class MinerTask {
         return failure;
     }
 
+    /**
+     * Stops as soon as it safely can, collecting whatever it has already placed.
+     *
+     * <p>Abandoning the mechanism would leave a piston, a lit torch and a support block sitting
+     * next to the target — untidy, and evidence. Idempotent, and a no-op once finished.</p>
+     */
+    public void abort() {
+        abort(null);
+    }
+
+    /** @param reason message key to report, or {@code null} when the player asked for the stop. */
+    private void abort(@Nullable String reason) {
+        if (aborted || isComplete()) {
+            return;
+        }
+        aborted = true;
+        succeeded = false;
+        failure = reason;
+        releaseRotation();
+        state = recycleQueue.isEmpty() ? TaskState.COMPLETE : TaskState.CLEANUP;
+    }
+
     /** Positions this task needs untouched by other tasks. */
     public boolean occupies(BlockPos pos) {
         return plan != null ? plan.occupies(pos) : pos.equals(target);
@@ -115,9 +141,22 @@ public final class MinerTask {
             abandon(null);
             return;
         }
-        if (++totalTicks > MAX_TOTAL_TICKS && state != TaskState.COMPLETE && state != TaskState.FAIL) {
-            abandon("badghost.message.timeout");
-            return;
+
+        totalTicks++;
+        if (!isComplete()) {
+            if (aborted) {
+                // Winding up already; allow a bounded grace period to finish collecting before
+                // giving up, so a stuck cleanup cannot wedge the queue forever.
+                if (totalTicks > MAX_TOTAL_TICKS + CLEANUP_GRACE_TICKS) {
+                    state = TaskState.COMPLETE;
+                    return;
+                }
+            } else if (totalTicks > MAX_TOTAL_TICKS) {
+                // Out of time, but the mechanism is real and in the world: collect it rather
+                // than walking away and leaving a piston and a lit torch next to the target.
+                abort("badghost.message.timeout");
+                return;
+            }
         }
 
         switch (state) {
@@ -359,7 +398,9 @@ public final class MinerTask {
     private void cleanup() {
         if (drainRecycleStep()) {
             releaseRotation();
-            state = succeeded ? TaskState.COMPLETE : TaskState.RETRY;
+            // An aborted task never retries: the player asked it to stop, and it only stayed
+            // alive long enough to pick its own mechanism back up.
+            state = succeeded || aborted ? TaskState.COMPLETE : TaskState.RETRY;
         } else {
             wait(TaskState.CLEANUP, 1);
         }
@@ -428,7 +469,11 @@ public final class MinerTask {
         state = recycleQueue.isEmpty() ? TaskState.FAIL : TaskState.CLEANUP;
     }
 
-    /** World is gone or the task ran out of time: stop touching anything. */
+    /**
+     * The world is gone, so nothing placed still exists and there is nothing to collect. Used
+     * only for that case; running out of time goes through {@link #abort(String)} instead, which
+     * still tidies up.
+     */
     private void abandon(@Nullable String messageKey) {
         failure = messageKey;
         succeeded = false;

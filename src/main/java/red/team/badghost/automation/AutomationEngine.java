@@ -42,6 +42,9 @@ public final class AutomationEngine {
 
     private static int scanCooldown;
 
+    /** Set when the off hand could not be handed back yet, e.g. a screen was open. */
+    private static boolean restorePending;
+
     private static String cachedSupportId;
     private static Block cachedSupportBlock = Blocks.SLIME_BLOCK;
 
@@ -87,6 +90,7 @@ public final class AutomationEngine {
     @SubscribeEvent
     public static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
         tasks.clear();
+        restorePending = false;
         InventoryHelper.reset();
         ModState.onJoinWorld();
     }
@@ -94,6 +98,8 @@ public final class AutomationEngine {
     @SubscribeEvent
     public static void onLoggingOut(ClientPlayerNetworkEvent.LoggingOut event) {
         tasks.clear();
+        // The inventory goes with the world; a pending restore cannot and must not survive it.
+        restorePending = false;
         PlayerLookUtils.release();
         InventoryHelper.reset();
         ModState.onLeaveWorld();
@@ -104,8 +110,10 @@ public final class AutomationEngine {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         if (ClientContext.isInvalid()) {
+            // No world to tidy up in, and nothing placed still exists: just drop the queue.
             if (!tasks.isEmpty()) {
-                stopAndCleanup();
+                tasks.clear();
+                PlayerLookUtils.release();
             }
             return;
         }
@@ -113,9 +121,21 @@ public final class AutomationEngine {
         PlayerLookUtils.tick();
         handleToggleKey();
 
+        // A swap needs the survival inventory menu, so handing the off hand back fails while a
+        // screen is open. Keep trying until it lands, whether or not the miner is still armed.
+        if (restorePending) {
+            restorePending = !InventoryHelper.restoreHeld();
+        }
+
         if (!ModState.isAutomationEnabled()) {
             if (!tasks.isEmpty()) {
+                // Disarmed, but the tasks keep ticking until they have picked their own
+                // mechanism back up; abandoning it would leave hardware next to the target.
                 stopAndCleanup();
+                driveTasks();
+                if (tasks.isEmpty()) {
+                    restorePending = !InventoryHelper.restoreHeld();
+                }
             }
             return;
         }
@@ -133,7 +153,7 @@ public final class AutomationEngine {
         driveTasks();
 
         if (tasks.isEmpty()) {
-            InventoryHelper.restoreHeld();
+            restorePending = !InventoryHelper.restoreHeld();
         }
     }
 
@@ -175,10 +195,12 @@ public final class AutomationEngine {
         }
     }
 
+    /** Asks every task to wind itself up. Idempotent; the queue drains over the next few ticks. */
     private static void stopAndCleanup() {
-        tasks.clear();
+        for (int i = 0; i < tasks.size(); i++) {
+            tasks.get(i).abort();
+        }
         PlayerLookUtils.release();
-        InventoryHelper.restoreHeld();
     }
 
     private static void spawnQueueParticles() {
@@ -324,11 +346,19 @@ public final class AutomationEngine {
         // Nearest first, so the player sees the mod work outwards from where they stand.
         var eye = player.getEyePosition();
         scanHits.sort(Comparator.comparingDouble(pos -> pos.distToCenterSqr(eye)));
-        for (BlockPos pos : scanHits) {
-            if (tasks.size() >= limit) {
-                break;
-            }
-            enqueue(pos);
+
+        // The requirements are the same for every hit, and checking them walks the whole
+        // inventory several times, so a shortfall is reported once here instead of once per
+        // candidate inside the loop below.
+        Component missing = MinerRequirements.describeMissing(scanHits.get(0));
+        if (missing != null) {
+            message(missing);
+            scanHits.clear();
+            return;
+        }
+
+        for (int i = 0; i < scanHits.size() && tasks.size() < limit; i++) {
+            enqueue(scanHits.get(i));
         }
         scanHits.clear();
     }
