@@ -72,5 +72,8 @@
   "badghost.message.nothing_to_clear": "Гостблоков нет",
   "badghost.message.cleared": "Убрано гостблоков: %s",
   "badghost.message.spot_occupied": "Там уже стоит твёрдый блок",
-  "badghost.message.screen_open": "Закрой инвентарь — при открытом экране предметы не перемещаются"
+  "badghost.message.screen_open": "Закрой инвентарь — при открытом экране предметы не перемещаются",
+  "badghost.message.cell_in_use": "Это место занято строящимся механизмом",
+  "badghost.message.queue_full": "Очередь заполнена (%s) — увеличь limitMax или подожди",
+  "badghost.message.already_queued": "Этот блок уже в очереди"
 }

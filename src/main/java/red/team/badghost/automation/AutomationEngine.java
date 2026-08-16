@@ -256,7 +256,10 @@ public final class AutomationEngine {
 
         BlockPos pos = event.getPos().immutable();
         if (isProtected(pos)) {
+            // The click is swallowed to protect a mechanism in progress; without a word that
+            // looks like the block simply refuses to break.
             event.setCanceled(true);
+            message(Component.translatable("badghost.message.cell_in_use"));
             return;
         }
         if (!event.getLevel().getBlockState(pos).is(Blocks.BEDROCK)) {
@@ -264,7 +267,7 @@ public final class AutomationEngine {
         }
 
         event.setCanceled(true);
-        if (enqueue(pos)) {
+        if (enqueue(pos, true)) {
             LocalPlayer player = ClientContext.getPlayer();
             if (player != null) {
                 player.swing(InteractionHand.MAIN_HAND);
@@ -282,29 +285,41 @@ public final class AutomationEngine {
         return false;
     }
 
-    /** Queues a target the same way a left click would. */
+    /** Queues a target the same way a left click would, reporting anything that stops it. */
     public static boolean requestTarget(BlockPos pos) {
-        return enqueue(pos.immutable());
+        return enqueue(pos.immutable(), true);
     }
 
-    private static boolean enqueue(BlockPos pos) {
+    /**
+     * @param announce whether a refusal is worth telling the player about. A click deserves an
+     *                 answer; the background scan runs every second and would only spam.
+     */
+    private static boolean enqueue(BlockPos pos, boolean announce) {
         LocalPlayer player = ClientContext.getPlayer();
         ClientLevel level = ClientContext.getLevel();
         if (player == null || level == null) {
             return false;
         }
         if (tasks.size() >= BadghostConfig.LIMIT_MAX.get()) {
+            if (announce) {
+                message(Component.translatable("badghost.message.queue_full", tasks.size()));
+            }
             return false;
         }
         for (int i = 0; i < tasks.size(); i++) {
             if (tasks.get(i).getTarget().equals(pos)) {
+                if (announce) {
+                    message(Component.translatable("badghost.message.already_queued"));
+                }
                 return false;
             }
         }
 
         Component missing = checkRequirements(pos);
         if (missing != null) {
-            message(missing);
+            if (announce) {
+                message(missing);
+            }
             return false;
         }
 
@@ -374,7 +389,7 @@ public final class AutomationEngine {
         }
 
         for (int i = 0; i < scanHits.size() && tasks.size() < limit; i++) {
-            enqueue(scanHits.get(i));
+            enqueue(scanHits.get(i), false);
         }
         scanHits.clear();
     }

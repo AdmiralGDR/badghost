@@ -56,6 +56,9 @@ public final class SelfTest {
     private static final int SETTLE_TICKS = 60;
     private static final int WATCH_LIMIT_TICKS = 600;
 
+    /** How long the scenario's own blocks are given to reach the client before giving up. */
+    private static final int SETUP_LIMIT_TICKS = 200;
+
     /**
      * One end-to-end case: a geometry, a mode and the block that must vanish. When
      * {@code abortMidway} is set the miner is disarmed while it is working instead, and the case
@@ -125,7 +128,7 @@ public final class SelfTest {
                 startScenario(connection);
                 phase = Phase.BUILD;
             });
-            case BUILD -> after(SETTLE_TICKS, () -> arm(level));
+            case BUILD -> awaitScenarioReady(level);
             case ARM -> phase = Phase.WATCH;
             case WATCH -> watch(level);
             case NEXT -> after(SETTLE_TICKS, () -> {
@@ -144,6 +147,39 @@ public final class SelfTest {
             case PHYSICS_FRICTION -> checkFriction(connection);
             case PHYSICS_BOUNCE -> after(SETTLE_TICKS, SelfTest::checkBounce);
             case DONE -> { }
+        }
+    }
+
+    /**
+     * Waits for the scenario's blocks to actually exist on the client before arming.
+     *
+     * <p>The setup goes out as commands, so the client only sees the result once the server has
+     * run them and sent the updates back. A fixed pause guessed at that and occasionally armed
+     * too early, failing on setup rather than on the thing under test. This waits for the fact
+     * and says plainly if it never arrives.</p>
+     */
+    private static void awaitScenarioReady(ClientLevel level) {
+        LocalPlayer player = ClientContext.getPlayer();
+        boolean targetReady = level.getBlockState(current().target()).is(Blocks.BEDROCK);
+        // Being on the ground is as much a precondition as the block: vanilla divides mining
+        // speed by five in mid-air, so arming while the player is still falling from the setup
+        // teleport fails the pickaxe check for a reason that has nothing to do with the pickaxe.
+        boolean playerReady = player != null && player.onGround();
+        if (targetReady && playerReady) {
+            ticks = 0;
+            arm(level);
+            return;
+        }
+        if (ticks > SETUP_LIMIT_TICKS) {
+            LocalPlayer p = ClientContext.getPlayer();
+            fail("the scenario's bedrock never appeared on the client after " + SETUP_LIMIT_TICKS
+                    + " ticks; " + current().target() + " holds "
+                    + level.getBlockState(current().target()).getBlock().getName().getString()
+                    + "; player at " + (p == null ? "?" : p.blockPosition())
+                    + ", onGround=" + (p != null && p.onGround())
+                    + ", dead=" + (p != null && p.isDeadOrDying())
+                    + ", screen=" + (ClientContext.getClient().screen == null
+                            ? "none" : ClientContext.getClient().screen.getClass().getSimpleName()));
         }
     }
 
@@ -196,10 +232,10 @@ public final class SelfTest {
 
     /** Bedrock flush with a stone floor: the plain VERTICAL_FAST case. */
     private static void buildFloor(ClientPacketListener c) {
+        standWest(c);
         clearAndFloor(c);
         BlockPos t = current().target();
         c.sendCommand(setblock(t, "minecraft:bedrock"));
-        standWest(c);
     }
 
     /**
@@ -208,11 +244,11 @@ public final class SelfTest {
      * the ROTATE state, the held faked yaw and the mixin.
      */
     private static void buildSideways(ClientPacketListener c) {
+        standWest(c);
         clearAndFloor(c);
         BlockPos t = current().target();
         c.sendCommand(setblock(t, "minecraft:bedrock"));
         c.sendCommand(setblock(t.above(), "minecraft:stone"));
-        standWest(c);
     }
 
     /**
@@ -221,11 +257,11 @@ public final class SelfTest {
      * case, and the primary reason a bedrock miner exists.
      */
     private static void buildCeiling(ClientPacketListener c) {
+        standWest(c);
         clearAndFloor(c);
         BlockPos t = current().target();
         c.sendCommand(setblock(t, "minecraft:bedrock"));
         c.sendCommand(setblock(t.above(), "minecraft:stone"));
-        standWest(c);
     }
 
     private static void clearAndFloor(ClientPacketListener c) {
@@ -251,7 +287,7 @@ public final class SelfTest {
         BlockPos target = s.target();
 
         if (!level.getBlockState(target).is(Blocks.BEDROCK)) {
-            fail("scenario setup failed, target is not bedrock");
+            fail("the target stopped being bedrock between the check and arming");
             return;
         }
         if (!offhandChecked) {

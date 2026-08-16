@@ -72,5 +72,8 @@
   "badghost.message.nothing_to_clear": "No ghost blocks to clear",
   "badghost.message.cleared": "Cleared %s ghost block(s)",
   "badghost.message.spot_occupied": "Something solid is already there",
-  "badghost.message.screen_open": "Close your inventory — items cannot be moved while a screen is open"
+  "badghost.message.screen_open": "Close your inventory — items cannot be moved while a screen is open",
+  "badghost.message.cell_in_use": "That space is part of a mechanism being built",
+  "badghost.message.queue_full": "Queue is full (%s) — raise limitMax or wait",
+  "badghost.message.already_queued": "That block is already queued"
 }
