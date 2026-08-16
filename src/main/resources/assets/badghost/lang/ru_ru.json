@@ -1,0 +1,32 @@
+{
+  "category.badghost.general": "BadGhost",
+  "key.badghost.createghostblock": "Поставить гостблок",
+  "key.badghost.toggleautomation": "Переключить Bedrock Miner",
+
+  "badghost.hud.title": "[BadGhost] Bedrock Miner: ВКЛ",
+  "badghost.hud.queue": "Очередь: %s",
+  "badghost.hud.queue_full": "Очередь: %s (ПОЛНА)",
+  "badghost.hud.status": "Статус: %s",
+  "badghost.hud.idle": "Статус: ОЖИДАНИЕ (нет целей)",
+
+  "badghost.req.piston": "поршень",
+  "badghost.req.torch": "красный факел",
+  "badghost.req.survival": "режим выживания",
+  "badghost.req.tool": "кирка мгновенного слома (Эффективность V + Спешка II)",
+  "badghost.req.count": "%s %sшт (есть %s)",
+  "badghost.message.missing": "Не хватает: %s",
+
+  "badghost.message.enabled": "Bedrock Miner включён",
+  "badghost.message.disabled": "Bedrock Miner выключен",
+  "badghost.message.survival_only": "Работает только в выживании",
+  "badghost.message.need_pistons": "Нужно минимум 2 поршня",
+  "badghost.message.need_torch": "Нужен красный факел",
+  "badghost.message.need_support": "Не удалось поставить блок-опору",
+  "badghost.message.need_support_named": "Нужен блок-опора: %s",
+  "badghost.message.need_efficiency": "Нужна кирка, ломающая поршень мгновенно (Эффективность V + Спешка II)",
+  "badghost.message.no_space": "Вокруг цели нет места под механизм",
+  "badghost.message.place_failed": "Установка отклонена",
+  "badghost.message.piston_stuck": "Поршень не выдвинулся вовремя",
+  "badghost.message.breaking_failed": "Не удалось пробить цель",
+  "badghost.message.timeout": "Цель просрочена"
+}

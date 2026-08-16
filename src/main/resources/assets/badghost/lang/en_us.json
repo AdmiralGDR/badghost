@@ -1,0 +1,32 @@
+{
+  "category.badghost.general": "BadGhost",
+  "key.badghost.createghostblock": "Create Ghost Block",
+  "key.badghost.toggleautomation": "Toggle Bedrock Miner",
+
+  "badghost.hud.title": "[BadGhost] Bedrock Miner: ON",
+  "badghost.hud.queue": "Queue: %s",
+  "badghost.hud.queue_full": "Queue: %s (FULL)",
+  "badghost.hud.status": "Status: %s",
+  "badghost.hud.idle": "Status: IDLE (waiting for targets)",
+
+  "badghost.req.piston": "piston",
+  "badghost.req.torch": "redstone torch",
+  "badghost.req.survival": "survival mode",
+  "badghost.req.tool": "insta-mine pickaxe (Efficiency V + Haste II)",
+  "badghost.req.count": "%s %sx (have %s)",
+  "badghost.message.missing": "Missing: %s",
+
+  "badghost.message.enabled": "Bedrock Miner enabled",
+  "badghost.message.disabled": "Bedrock Miner disabled",
+  "badghost.message.survival_only": "Survival mode only",
+  "badghost.message.need_pistons": "Need at least 2 pistons",
+  "badghost.message.need_torch": "Need a redstone torch",
+  "badghost.message.need_support": "Could not place the support block",
+  "badghost.message.need_support_named": "Need a support block: %s",
+  "badghost.message.need_efficiency": "Need a pickaxe that breaks a piston instantly (Efficiency V + Haste II)",
+  "badghost.message.no_space": "No room for the mechanism around the target",
+  "badghost.message.place_failed": "Placement was rejected",
+  "badghost.message.piston_stuck": "Piston did not extend in time",
+  "badghost.message.breaking_failed": "Could not break the target",
+  "badghost.message.timeout": "Target timed out"
+}
