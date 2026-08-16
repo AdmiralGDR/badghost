@@ -38,5 +38,6 @@
   "key.badghost.clearghostblocks": "Убрать все гостблоки",
   "badghost.message.ghost_limit": "Достигнут лимит гостблоков (%s)",
   "badghost.hud.stats": "Сессия: %s пробито, %s провалов, %s попыток, %sс в среднем",
-  "badghost.config.disableNegatives": "Скрывать кружение от тошноты и туман слепоты"
+  "badghost.config.disableNegatives": "Скрывать кружение от тошноты и туман слепоты",
+  "badghost.message.unknown_ghost_block": "Неизвестный блок для гостблока: %s"
 }

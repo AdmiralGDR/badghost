@@ -38,5 +38,6 @@
   "key.badghost.clearghostblocks": "Clear All Ghost Blocks",
   "badghost.message.ghost_limit": "Ghost block limit reached (%s)",
   "badghost.hud.stats": "Session: %s broken, %s failed, %s tries each, %ss avg",
-  "badghost.config.disableNegatives": "Hide nausea swirl and blindness fog"
+  "badghost.config.disableNegatives": "Hide nausea swirl and blindness fog",
+  "badghost.message.unknown_ghost_block": "Unknown ghost block: %s"
 }

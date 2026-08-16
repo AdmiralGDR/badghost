@@ -57,22 +57,27 @@ public final class VisualService {
             return;
         }
 
-        Block ghostBlock = resolveGhostBlock();
-        if (ghostBlock == null) {
-            return;
-        }
-
         if (limitWarnCooldown > 0) {
             limitWarnCooldown--;
         }
+
+        // Undo, clear and pruning work off the registry alone. They must keep working even when
+        // the configured block id is unusable, or a typo would strand every ghost already placed
+        // with no way to take it back.
         while (KeyBindings.UNDO_GHOST_BLOCK.consumeClick()) {
             undoLast();
         }
         while (KeyBindings.CLEAR_GHOST_BLOCKS.consumeClick()) {
             clearAll();
         }
+
+        Block ghostBlock = resolveGhostBlock();
         if (KeyBindings.PLACE_GHOST_BLOCK.isDown()) {
-            placeGhostBlock(mc, player, level, ghostBlock);
+            if (ghostBlock == null) {
+                warnUnknownBlock(player);
+            } else {
+                placeGhostBlock(mc, player, level, ghostBlock);
+            }
         }
         if (level.getGameTime() % 4 == 0) {
             spawnAura(player, level);
@@ -131,6 +136,17 @@ public final class VisualService {
             double z = pos.getZ() + level.random.nextDouble();
             level.addParticle(ParticleTypes.ENCHANT, x, y, z, 0.0D, 0.1D, 0.0D);
         });
+    }
+
+    /** Tells the player their configured block id is unusable, rather than failing silently. */
+    private static void warnUnknownBlock(LocalPlayer player) {
+        if (limitWarnCooldown > 0) {
+            return;
+        }
+        limitWarnCooldown = LIMIT_WARN_TICKS;
+        player.displayClientMessage(
+                Component.translatable("badghost.message.unknown_ghost_block",
+                        BadghostConfig.GHOST_BLOCK.get()), true);
     }
 
     /** Says once per cooldown that the ghost budget is full, rather than every tick. */
