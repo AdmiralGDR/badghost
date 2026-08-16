@@ -66,5 +66,11 @@
   "badghost.configuration.autoScanInterval": "Интервал скана (тики)",
   "badghost.configuration.espEnabled": "Обводить блоки в очереди",
   "badghost.configuration.espColor": "Цвет обводки (RRGGBB)",
-  "badghost.configuration.espAlpha": "Непрозрачность обводки"
+  "badghost.configuration.espAlpha": "Непрозрачность обводки",
+  "badghost.message.nothing_to_undo": "Нечего отменять",
+  "badghost.message.undone": "Гостблок убран (осталось %s)",
+  "badghost.message.nothing_to_clear": "Гостблоков нет",
+  "badghost.message.cleared": "Убрано гостблоков: %s",
+  "badghost.message.spot_occupied": "Там уже стоит твёрдый блок",
+  "badghost.message.screen_open": "Закрой инвентарь — при открытом экране предметы не перемещаются"
 }

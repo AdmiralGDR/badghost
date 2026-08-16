@@ -41,14 +41,18 @@ echo "--- self-test trace ---"
 grep -F "BADGHOST-SELFTEST" "${LOG}" | sed 's/^.*BADGHOST-SELFTEST[]:]*//' || true
 echo "-----------------------"
 
-verdict=$(grep -oE "RESULT=(PASS|FAIL)" "${LOG}" | tail -1)
+# Report the harness's own verdict line rather than a summary of our own, so a run that
+# verified less than it should cannot be described here as if it verified everything.
+verdict_line=$(grep -aoE "RESULT=(PASS|FAIL).*" "${LOG}" | tail -1)
+verdict=$(printf '%s' "${verdict_line}" | grep -oE "RESULT=(PASS|FAIL)")
 case "${verdict}" in
     RESULT=PASS)
-        echo "SELF-TEST PASSED: the miner removed the bedrock"
+        echo "SELF-TEST PASSED: ${verdict_line#RESULT=PASS }"
         exit 0
         ;;
     RESULT=FAIL)
-        echo "SELF-TEST FAILED, see ${LOG}" >&2
+        echo "SELF-TEST FAILED: ${verdict_line#RESULT=FAIL }" >&2
+        echo "see ${LOG}" >&2
         exit 1
         ;;
     *)

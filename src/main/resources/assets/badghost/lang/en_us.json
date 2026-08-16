@@ -66,5 +66,11 @@
   "badghost.configuration.autoScanInterval": "Scan interval (ticks)",
   "badghost.configuration.espEnabled": "Outline queued blocks",
   "badghost.configuration.espColor": "Outline colour (RRGGBB)",
-  "badghost.configuration.espAlpha": "Outline opacity"
+  "badghost.configuration.espAlpha": "Outline opacity",
+  "badghost.message.nothing_to_undo": "No ghost block to undo",
+  "badghost.message.undone": "Ghost block removed (%s left)",
+  "badghost.message.nothing_to_clear": "No ghost blocks to clear",
+  "badghost.message.cleared": "Cleared %s ghost block(s)",
+  "badghost.message.spot_occupied": "Something solid is already there",
+  "badghost.message.screen_open": "Close your inventory — items cannot be moved while a screen is open"
 }

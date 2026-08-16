@@ -100,6 +100,9 @@ public final class SelfTest {
     private static boolean allPassed = true;
     private static boolean abortIssued;
 
+    /** Every check that actually ran and passed, so the verdict can name them. */
+    private static final List<String> passed = new java.util.ArrayList<>();
+
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         if (phase == Phase.DONE || ClientContext.isInvalid()) {
@@ -299,6 +302,7 @@ public final class SelfTest {
 
         if (!level.getBlockState(current().target()).is(Blocks.BEDROCK)) {
             LOGGER.info("{}: scenario '{}' PASS — bedrock removed", TAG, current().name());
+            passed.add(current().name());
             ModState.setAutomationEnabled(false);
             phase = Phase.NEXT;
             return;
@@ -345,6 +349,7 @@ public final class SelfTest {
             return;
         }
         LOGGER.info("{}: scenario '{}' PASS — abort left nothing behind", TAG, current().name());
+        passed.add(current().name());
         phase = Phase.NEXT;
     }
 
@@ -394,6 +399,7 @@ public final class SelfTest {
             return;
         }
         LOGGER.info("{}: negative-effect suppression PASS — nausea overlay and blindness fog both suppressed", TAG);
+        passed.add("negative-effects");
         BadghostConfig.DISABLE_NEGATIVES.set(false);
         startPhysicsCheck();
         phase = Phase.PHYSICS;
@@ -432,6 +438,7 @@ public final class SelfTest {
             return;
         }
         LOGGER.info("{}: ice PASS — ghost block reports friction {}", TAG, GhostPhysics.slipperyFriction());
+        passed.add("ghost-ice");
         // Drop from a height so the landing goes through the fall handler the bounce redirects.
         connection.sendCommand(String.format("tp @s %d %d %d -90 0",
                 GHOST_POS.getX(), GHOST_POS.getY() + 6, GHOST_POS.getZ()));
@@ -446,6 +453,7 @@ public final class SelfTest {
             return;
         }
         LOGGER.info("{}: slime PASS — landing on a ghost block bounced", TAG);
+        passed.add("ghost-slime");
         BadghostConfig.FROZEN_SLIPPERY.set(false);
         BadghostConfig.BOUNCY.set(false);
         finishAll();
@@ -464,10 +472,25 @@ public final class SelfTest {
         LOGGER.info("{}: RESULT=FAIL scenario '{}': {}", TAG, current().name(), detail);
     }
 
+    /** Everything this harness claims to verify. A run that skips any of it is not a pass. */
+    private static final List<String> EXPECTED_CHECKS = List.of(
+            "vertical-floor", "all-direction-sideways", "nether-roof-ceiling",
+            "abort-leaves-nothing", "negative-effects", "ghost-ice", "ghost-slime");
+
     private static void finishAll() {
         phase = Phase.DONE;
         ModState.setAutomationEnabled(false);
-        LOGGER.info("{}: RESULT={} all {} scenarios",
-                TAG, allPassed ? "PASS" : "FAIL", SCENARIOS.size());
+
+        List<String> skipped = new java.util.ArrayList<>(EXPECTED_CHECKS);
+        skipped.removeAll(passed);
+        if (!skipped.isEmpty()) {
+            // A check that never ran must not hide behind the ones that did.
+            allPassed = false;
+            LOGGER.info("{}: RESULT=FAIL {} of {} checks never ran: {}",
+                    TAG, skipped.size(), EXPECTED_CHECKS.size(), skipped);
+            return;
+        }
+        LOGGER.info("{}: RESULT={} all {} checks: {}",
+                TAG, allPassed ? "PASS" : "FAIL", passed.size(), passed);
     }
 }

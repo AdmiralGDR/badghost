@@ -231,6 +231,10 @@ public final class MinerTask {
             state = TaskState.PLACE_TORCH;
             return;
         }
+        if (!InventoryHelper.canMoveItems()) {
+            fail("badghost.message.screen_open");
+            return;
+        }
         if (!InventoryHelper.switchToOffHand(supportBlock().asItem())) {
             fail("badghost.message.need_support");
             return;
@@ -251,6 +255,10 @@ public final class MinerTask {
         }
         // The torch goes down before the piston: the piston then arrives into an already
         // powered cell and starts extending on the very next tick.
+        if (!InventoryHelper.canMoveItems()) {
+            fail("badghost.message.screen_open");
+            return;
+        }
         if (!InventoryHelper.switchToOffHand(Items.REDSTONE_TORCH)) {
             fail("badghost.message.need_torch");
             return;
@@ -279,6 +287,10 @@ public final class MinerTask {
             return;
         }
 
+        if (!InventoryHelper.canMoveItems()) {
+            fail("badghost.message.screen_open");
+            return;
+        }
         if (!InventoryHelper.switchToOffHand(Items.PISTON, Items.STICKY_PISTON)) {
             fail("badghost.message.need_pistons");
             return;

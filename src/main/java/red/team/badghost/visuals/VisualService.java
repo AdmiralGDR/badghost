@@ -113,7 +113,12 @@ public final class VisualService {
         }
 
         BlockState existing = level.getBlockState(targetPos);
-        if (existing.is(ghostBlock) || !existing.canBeReplaced()) {
+        if (existing.is(ghostBlock)) {
+            return;
+        }
+        if (!existing.canBeReplaced()) {
+            // Holding the key against a solid wall otherwise looks like the feature is broken.
+            warnOccupied(player);
             return;
         }
         BlockState ghostState = ghostBlock.defaultBlockState();
@@ -149,6 +154,15 @@ public final class VisualService {
                         BadghostConfig.GHOST_BLOCK.get()), true);
     }
 
+    /** Says once per cooldown that there is something solid in the way. */
+    private static void warnOccupied(LocalPlayer player) {
+        if (limitWarnCooldown > 0) {
+            return;
+        }
+        limitWarnCooldown = LIMIT_WARN_TICKS;
+        player.displayClientMessage(Component.translatable("badghost.message.spot_occupied"), true);
+    }
+
     /** Says once per cooldown that the ghost budget is full, rather than every tick. */
     private static void warnLimitReached(LocalPlayer player) {
         if (limitWarnCooldown > 0) {
@@ -159,31 +173,47 @@ public final class VisualService {
                 Component.translatable("badghost.message.ghost_limit", GhostBlockRegistry.size()), true);
     }
 
-    /** Removes the newest ghost block, restoring what it covered. */
+    /** Removes the newest ghost block, restoring what it covered, and says what it did. */
     public static void undoLast() {
         ClientLevel level = ClientContext.getLevel();
+        LocalPlayer player = ClientContext.getPlayer();
+        if (level == null || player == null) {
+            return;
+        }
         BlockPos pos = GhostBlockRegistry.lastPlaced();
-        if (level == null || pos == null) {
+        if (pos == null) {
+            // Pressing a key and getting nothing back reads as a broken key, so say so.
+            player.displayClientMessage(Component.translatable("badghost.message.nothing_to_undo"), true);
             return;
         }
         BlockState original = GhostBlockRegistry.remove(pos);
         if (original != null) {
             level.setBlock(pos, original, Block.UPDATE_ALL);
         }
+        player.displayClientMessage(
+                Component.translatable("badghost.message.undone", GhostBlockRegistry.size()), true);
     }
 
-    /** Removes every ghost block, restoring what each covered. */
+    /** Removes every ghost block, restoring what each covered, and reports the count. */
     public static void clearAll() {
         ClientLevel level = ClientContext.getLevel();
+        LocalPlayer player = ClientContext.getPlayer();
         if (level == null) {
             GhostBlockRegistry.clear();
             return;
         }
+        int removed = 0;
         for (BlockPos pos : List.copyOf(GhostBlockRegistry.positions())) {
             BlockState original = GhostBlockRegistry.remove(pos);
             if (original != null) {
                 level.setBlock(pos, original, Block.UPDATE_ALL);
             }
+            removed++;
+        }
+        if (player != null) {
+            player.displayClientMessage(Component.translatable(
+                    removed == 0 ? "badghost.message.nothing_to_clear" : "badghost.message.cleared",
+                    removed), true);
         }
     }
 

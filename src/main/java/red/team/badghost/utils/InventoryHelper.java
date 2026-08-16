@@ -132,6 +132,19 @@ public final class InventoryHelper {
     }
 
     /**
+     * Whether items can be moved between slots at all right now.
+     *
+     * <p>A swap click is addressed to the open menu, so it silently does nothing while a chest
+     * or crafting screen is up. Callers check this first so they can say what is actually wrong
+     * rather than reporting the item as missing.</p>
+     */
+    public static boolean canMoveItems() {
+        Minecraft mc = ClientContext.getClient();
+        LocalPlayer player = mc.player;
+        return player != null && mc.screen == null && player.containerMenu == player.inventoryMenu;
+    }
+
+    /**
      * Performs a container swap between an inventory slot and either a hotbar slot or the off
      * hand. Only valid while the survival inventory menu is the open one.
      */
@@ -142,9 +155,7 @@ public final class InventoryHelper {
         if (player == null || gameMode == null) {
             return false;
         }
-        // A swap click is addressed to the currently open menu; if a chest or crafting screen
-        // is up, the slot ids mean something else entirely.
-        if (mc.screen != null || player.containerMenu != player.inventoryMenu) {
+        if (!canMoveItems()) {
             return false;
         }
         int menuSlot = toMenuSlot(sourceInventorySlot);
