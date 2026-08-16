@@ -89,6 +89,53 @@ class GhostBlockRegistryTest {
     }
 
     @Test
+    @DisplayName("visiting prunes vanished ghosts and never throws on the live path")
+    void visitLivePrunes() {
+        BlockPos kept = new BlockPos(1, 0, 0);
+        BlockPos gone = new BlockPos(2, 0, 0);
+        GhostBlockRegistry.add(kept, GHOST, AIR, LIMIT);
+        GhostBlockRegistry.add(gone, GHOST, AIR, LIMIT);
+
+        // The server corrected one of them away.
+        java.util.List<BlockPos> visited = new java.util.ArrayList<>();
+        GhostBlockRegistry.visitLive(pos -> pos.equals(gone) ? AIR : GHOST, visited::add);
+
+        assertEquals(java.util.List.of(kept), visited, "only the surviving ghost is drawn");
+        assertFalse(GhostBlockRegistry.contains(gone), "the vanished one is forgotten");
+        assertTrue(GhostBlockRegistry.contains(kept));
+    }
+
+    @Test
+    @DisplayName("a pruned ghost is skipped by undo afterwards")
+    void prunedGhostLeavesUndoConsistent() {
+        BlockPos first = new BlockPos(1, 0, 0);
+        BlockPos gone = new BlockPos(2, 0, 0);
+        GhostBlockRegistry.add(first, GHOST, AIR, LIMIT);
+        GhostBlockRegistry.add(gone, GHOST, AIR, LIMIT);
+
+        GhostBlockRegistry.visitLive(pos -> pos.equals(gone) ? AIR : GHOST, pos -> { });
+
+        assertEquals(first, GhostBlockRegistry.lastPlaced(),
+                "undo must fall through to the ghost that is still standing");
+    }
+
+    @Test
+    @DisplayName("staleness is judged by the recorded ghost, not by some other block")
+    void stalenessUsesTheRecordedState() {
+        BlockPos pos = BlockPos.ZERO;
+        GhostBlockRegistry.add(pos, GHOST, AIR, LIMIT);
+
+        // A different block standing there than the one recorded means the ghost is gone,
+        // whatever the configured ghost block happens to be now.
+        GhostBlockRegistry.visitLive(p -> GRASS, p -> { });
+        assertFalse(GhostBlockRegistry.contains(pos));
+
+        GhostBlockRegistry.add(pos, GHOST, AIR, LIMIT);
+        GhostBlockRegistry.visitLive(p -> GHOST, p -> { });
+        assertTrue(GhostBlockRegistry.contains(pos), "the recorded ghost is still there");
+    }
+
+    @Test
     @DisplayName("positions() reflects the registry and rejects outside writes")
     void positionsAreReadOnly() {
         GhostBlockRegistry.add(BlockPos.ZERO, GHOST, AIR, LIMIT);

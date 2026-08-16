@@ -8,9 +8,12 @@ import org.jetbrains.annotations.Nullable;
 import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Deque;
+import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Consumer;
+import java.util.function.Function;
 
 /**
  * What the mod has faked onto the client's copy of the world, and what was there before.
@@ -35,6 +38,31 @@ public final class GhostBlockRegistry {
     /** Positions currently faked. Read-only; safe to consult from the render and physics paths. */
     public static Set<BlockPos> positions() {
         return positionsView;
+    }
+
+    /**
+     * Drops entries whose ghost is no longer standing, then hands each survivor to {@code visitor}.
+     *
+     * <p>Removal lives here rather than at the call site because {@link #positions()} is an
+     * unmodifiable view: iterating it and calling {@code remove} throws, which would take the
+     * client tick down the first time a ghost went away.</p>
+     *
+     * <p>Staleness is judged against the state that was recorded for that cell, not against
+     * whatever block the config names now — otherwise changing the setting would orphan every
+     * existing ghost, leaving fake blocks in the world that nothing could undo.</p>
+     */
+    public static void visitLive(Function<BlockPos, BlockState> actualState, Consumer<BlockPos> visitor) {
+        Iterator<Map.Entry<BlockPos, Entry>> it = entries.entrySet().iterator();
+        while (it.hasNext()) {
+            Map.Entry<BlockPos, Entry> entry = it.next();
+            BlockPos pos = entry.getKey();
+            if (!actualState.apply(pos).is(entry.getValue().ghost().getBlock())) {
+                it.remove();
+                placementOrder.remove(pos);
+                continue;
+            }
+            visitor.accept(pos);
+        }
     }
 
     public static boolean contains(BlockPos pos) {

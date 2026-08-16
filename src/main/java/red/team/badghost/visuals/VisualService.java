@@ -24,7 +24,6 @@ import red.team.badghost.config.BadghostConfig;
 import red.team.badghost.core.ClientContext;
 import red.team.badghost.core.ModState;
 
-import java.util.Iterator;
 import java.util.List;
 
 /** Client-only fake blocks, with a particle aura so they can be told apart from real ones. */
@@ -76,7 +75,7 @@ public final class VisualService {
             placeGhostBlock(mc, player, level, ghostBlock);
         }
         if (level.getGameTime() % 4 == 0) {
-            spawnAura(player, level, ghostBlock);
+            spawnAura(player, level);
         }
     }
 
@@ -121,23 +120,17 @@ public final class VisualService {
         level.setBlock(targetPos, ghostState, Block.UPDATE_ALL);
     }
 
-    private static void spawnAura(LocalPlayer player, ClientLevel level, Block ghostBlock) {
-        Iterator<BlockPos> it = GhostBlockRegistry.positions().iterator();
-        while (it.hasNext()) {
-            BlockPos pos = it.next();
-            if (!level.getBlockState(pos).is(ghostBlock)) {
-                // The server corrected it, or the player broke it: stop tracking.
-                it.remove();
-                continue;
-            }
+    private static void spawnAura(LocalPlayer player, ClientLevel level) {
+        // The registry drops whatever the server has since corrected away; this only draws.
+        GhostBlockRegistry.visitLive(level::getBlockState, pos -> {
             if (!pos.closerToCenterThan(player.position(), AURA_RANGE)) {
-                continue;
+                return;
             }
             double x = pos.getX() + level.random.nextDouble();
             double y = pos.getY() + 1.0D + level.random.nextDouble() * 0.5D;
             double z = pos.getZ() + level.random.nextDouble();
             level.addParticle(ParticleTypes.ENCHANT, x, y, z, 0.0D, 0.1D, 0.0D);
-        }
+        });
     }
 
     /** Says once per cooldown that the ghost budget is full, rather than every tick. */
