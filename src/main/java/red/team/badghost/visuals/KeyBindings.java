@@ -23,8 +23,22 @@ public final class KeyBindings {
             GLFW.GLFW_KEY_B,
             CATEGORY);
 
+    public static final KeyMapping UNDO_GHOST_BLOCK = new KeyMapping(
+            "key.badghost.undoghostblock",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_H,
+            CATEGORY);
+
+    public static final KeyMapping CLEAR_GHOST_BLOCKS = new KeyMapping(
+            "key.badghost.clearghostblocks",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_J,
+            CATEGORY);
+
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(PLACE_GHOST_BLOCK);
+        event.register(UNDO_GHOST_BLOCK);
+        event.register(CLEAR_GHOST_BLOCKS);
         event.register(TOGGLE_AUTOMATION);
     }
 }

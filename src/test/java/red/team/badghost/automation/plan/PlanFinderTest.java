@@ -9,6 +9,7 @@ import org.junit.jupiter.api.Test;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -18,6 +19,30 @@ class PlanFinderTest {
 
     private static final BlockPos TARGET = BlockPos.ZERO;
 
+    /** The plan, or {@code null} when the search was rejected. */
+    private static MiningPlan findPlan(WorldView view, BlockPos target, PlanMode mode) {
+        return PlanFinder.find(view, target, mode) instanceof PlanResult.Ok ok ? ok.plan() : null;
+    }
+
+    /** The quality score, or {@code null} when the candidate is unusable. */
+    private static Integer qualityOf(WorldView view, MiningPlan plan) {
+        return PlanFinder.evaluate(view, plan) instanceof PlanResult.Ok ok ? ok.quality() : null;
+    }
+
+    /** The reason a search failed; fails the test if it actually succeeded. */
+    private static PlanResult.Reason reasonFor(WorldView view, BlockPos target, PlanMode mode) {
+        PlanResult result = PlanFinder.find(view, target, mode);
+        assertInstanceOf(PlanResult.Rejected.class, result, "expected no plan");
+        return ((PlanResult.Rejected) result).reason();
+    }
+
+    /** The reason one candidate was rejected; fails the test if it was accepted. */
+    private static PlanResult.Reason reasonFor(WorldView view, MiningPlan plan) {
+        PlanResult result = PlanFinder.evaluate(view, plan);
+        assertInstanceOf(PlanResult.Rejected.class, result, "expected a rejection");
+        return ((PlanResult.Rejected) result).reason();
+    }
+
     @Test
     @DisplayName("bedrock floor: piston goes on top and pushes down")
     void floorPlanGoesAbove() {
@@ -26,7 +51,7 @@ class PlanFinderTest {
                 .fill(-4, -4, -4, 4, 0, 4)
                 .eye(0.5D, 2.6D, 3.5D);
 
-        MiningPlan plan = PlanFinder.find(view, TARGET, PlanMode.VERTICAL_FAST);
+        MiningPlan plan = findPlan(view, TARGET, PlanMode.VERTICAL_FAST);
 
         assertNotNull(plan, "a floor target must be plannable");
         assertEquals(TARGET.above(), plan.pistonPos());
@@ -44,7 +69,7 @@ class PlanFinderTest {
                 .fill(-4, 0, -4, 4, 4, 4)
                 .eye(0.5D, -2.4D, 3.5D);
 
-        MiningPlan plan = PlanFinder.find(view, TARGET, PlanMode.VERTICAL_FAST);
+        MiningPlan plan = findPlan(view, TARGET, PlanMode.VERTICAL_FAST);
 
         assertNotNull(plan, "a ceiling target must be plannable");
         assertEquals(TARGET.below(), plan.pistonPos());
@@ -61,8 +86,8 @@ class PlanFinderTest {
                 .fill(-4, -4, -4, 4, 4, 4)
                 .eye(0.5D, 1.6D, 0.5D);
 
-        assertNull(PlanFinder.find(view, TARGET, PlanMode.VERTICAL_FAST));
-        assertNull(PlanFinder.find(view, TARGET, PlanMode.ALL_DIRECTION));
+        assertNull(findPlan(view, TARGET, PlanMode.VERTICAL_FAST));
+        assertNull(findPlan(view, TARGET, PlanMode.ALL_DIRECTION));
     }
 
     @Test
@@ -74,10 +99,10 @@ class PlanFinderTest {
                 .fill(-4, 1, -4, 4, 4, 4)
                 .eye(3.5D, 0.6D, 0.5D);
 
-        assertNull(PlanFinder.find(view, TARGET, PlanMode.VERTICAL_FAST),
+        assertNull(findPlan(view, TARGET, PlanMode.VERTICAL_FAST),
                 "both vertical faces are solid");
 
-        MiningPlan plan = PlanFinder.find(view, TARGET, PlanMode.ALL_DIRECTION);
+        MiningPlan plan = findPlan(view, TARGET, PlanMode.ALL_DIRECTION);
         assertNotNull(plan);
         assertTrue(plan.pushDir().getAxis().isHorizontal(), "a side face must have been chosen");
         assertEquals(TARGET, plan.pistonPos().relative(plan.pushDir()));
@@ -89,13 +114,13 @@ class PlanFinderTest {
         FakeWorldView open = new FakeWorldView()
                 .fill(-4, -4, -4, 4, 0, 4)
                 .eye(0.5D, 2.6D, 3.5D);
-        assertNotNull(PlanFinder.find(open, TARGET, PlanMode.VERTICAL_FAST));
+        assertNotNull(findPlan(open, TARGET, PlanMode.VERTICAL_FAST));
 
         FakeWorldView blocked = new FakeWorldView()
                 .fill(-4, -4, -4, 4, 0, 4)
                 .eye(0.5D, 2.6D, 3.5D)
                 .occupied(TARGET.above());
-        assertNull(PlanFinder.find(blocked, TARGET, PlanMode.VERTICAL_FAST),
+        assertNull(findPlan(blocked, TARGET, PlanMode.VERTICAL_FAST),
                 "the only piston position is claimed by another task");
     }
 
@@ -106,13 +131,13 @@ class PlanFinderTest {
                 .fill(-4, -4, -4, 4, 0, 4)
                 .eye(0.5D, 2.6D, 3.5D)
                 .unreachable(TARGET.above());
-        assertNull(PlanFinder.find(unreachable, TARGET, PlanMode.VERTICAL_FAST));
+        assertNull(findPlan(unreachable, TARGET, PlanMode.VERTICAL_FAST));
 
         FakeWorldView invisible = new FakeWorldView()
                 .fill(-4, -4, -4, 4, 0, 4)
                 .eye(0.5D, 2.6D, 3.5D)
                 .invisible(TARGET.above());
-        assertNull(PlanFinder.find(invisible, TARGET, PlanMode.VERTICAL_FAST));
+        assertNull(findPlan(invisible, TARGET, PlanMode.VERTICAL_FAST));
     }
 
     @Test
@@ -125,7 +150,7 @@ class PlanFinderTest {
 
         // The only free piston cell is above the target and its only free extend direction is
         // up, so blocking that leaves nothing.
-        assertNull(PlanFinder.find(view, TARGET, PlanMode.VERTICAL_FAST));
+        assertNull(findPlan(view, TARGET, PlanMode.VERTICAL_FAST));
     }
 
     @Test
@@ -141,14 +166,14 @@ class PlanFinderTest {
         FakeWorldView floor = new FakeWorldView()
                 .fill(-4, -4, -4, 4, 0, 4)
                 .eye(0.5D, 2.6D, 3.5D);
-        assertEquals(0, PlanFinder.quality(floor, bare), "a clean plan scores best");
-        assertNull(PlanFinder.quality(floor, supported), "no support fits into solid ground");
+        assertEquals(0, qualityOf(floor, bare), "a clean plan scores best");
+        assertNull(qualityOf(floor, supported), "no support fits into solid ground");
 
         // In open air it is the other way round: nothing holds the torch, so the support is the
         // only thing that makes the plan work, and it is ranked worse than a clean one.
         FakeWorldView air = new FakeWorldView().eye(0.5D, 2.6D, 3.5D);
-        assertNull(PlanFinder.quality(air, bare), "the torch would pop off");
-        assertEquals(1, PlanFinder.quality(air, supported), "viable, but costs a block");
+        assertNull(qualityOf(air, bare), "the torch would pop off");
+        assertEquals(1, qualityOf(air, supported), "viable, but costs a block");
     }
 
     @Test
@@ -161,13 +186,13 @@ class PlanFinderTest {
                 .fill(-4, -4, -4, 4, 0, 4)
                 .eye(0.5D, 2.6D, 3.5D)
                 .powered(piston);
-        assertEquals(3, PlanFinder.quality(powered, plan));
+        assertEquals(3, qualityOf(powered, plan));
 
         FakeWorldView occupiedByPlayer = new FakeWorldView()
                 .fill(-4, -4, -4, 4, 0, 4)
                 .eye(0.5D, 2.6D, 3.5D)
                 .playerBox(piston.above());
-        assertEquals(2, PlanFinder.quality(occupiedByPlayer, plan));
+        assertEquals(2, qualityOf(occupiedByPlayer, plan));
     }
 
     @Test
@@ -181,8 +206,8 @@ class PlanFinderTest {
         MiningPlan supported = new MiningPlan(TARGET, piston, Direction.UP, Direction.DOWN,
                 piston.east(), piston.east().below());
 
-        assertNull(PlanFinder.quality(view, bare));
-        assertEquals(1, PlanFinder.quality(view, supported));
+        assertNull(qualityOf(view, bare));
+        assertEquals(1, qualityOf(view, supported));
     }
 
     @Test
@@ -200,7 +225,7 @@ class PlanFinderTest {
 
         MiningPlan plan = new MiningPlan(TARGET, piston, Direction.UP, Direction.DOWN, torch, null);
 
-        assertNull(PlanFinder.quality(view, plan));
+        assertNull(qualityOf(view, plan));
         assertEquals(0, view.visibilityChecks(), "line of sight was probed for a doomed candidate");
     }
 
@@ -214,8 +239,78 @@ class PlanFinderTest {
         BlockPos piston = TARGET.above();
         MiningPlan plan = new MiningPlan(TARGET, piston, Direction.UP, Direction.DOWN, piston.east(), null);
 
-        assertEquals(0, PlanFinder.quality(view, plan));
+        assertEquals(0, qualityOf(view, plan));
         assertTrue(view.visibilityChecks() > 0, "a surviving candidate must be sight-checked");
+    }
+
+    @Test
+    @DisplayName("each rejection names its own cause, not a blanket failure")
+    void rejectionReasonsAreSpecific() {
+        BlockPos piston = TARGET.above();
+        BlockPos torch = piston.east();
+        MiningPlan bare = new MiningPlan(TARGET, piston, Direction.UP, Direction.DOWN, torch, null);
+        MiningPlan supported = new MiningPlan(TARGET, piston, Direction.UP, Direction.DOWN, torch, torch.below());
+
+        // A fresh floor world per case, so one case's tweak cannot leak into the next.
+        java.util.function.Supplier<FakeWorldView> floor =
+                () -> new FakeWorldView().fill(-4, -4, -4, 4, 0, 4).eye(0.5D, 2.6D, 3.5D);
+
+        assertEquals(PlanResult.Reason.OCCUPIED_BY_TASK,
+                reasonFor(floor.get().occupied(piston), bare));
+        assertEquals(PlanResult.Reason.CELL_BLOCKED,
+                reasonFor(floor.get().solid(torch), bare));
+        assertEquals(PlanResult.Reason.OUT_OF_REACH,
+                reasonFor(floor.get().unreachable(piston), bare));
+        assertEquals(PlanResult.Reason.NO_LINE_OF_SIGHT,
+                reasonFor(floor.get().invisible(piston), bare));
+        // Nothing solid anywhere: the torch has no floor and no wall to cling to.
+        assertEquals(PlanResult.Reason.TORCH_WONT_SURVIVE,
+                reasonFor(new FakeWorldView().eye(0.5D, 2.6D, 3.5D), bare));
+        // On solid ground the support cell is already filled, so the support cannot go in.
+        assertEquals(PlanResult.Reason.SUPPORT_WONT_FIT,
+                reasonFor(floor.get(), supported));
+    }
+
+    @Test
+    @DisplayName("a failed search reports the furthest reason it reached")
+    void searchReportsMostInformativeReason() {
+        // Encased on every side: the search never gets past the very first check.
+        FakeWorldView encased = new FakeWorldView()
+                .fill(-4, -4, -4, 4, 4, 4)
+                .eye(0.5D, 1.6D, 0.5D);
+        assertEquals(PlanResult.Reason.CELL_BLOCKED,
+                reasonFor(encased, TARGET, PlanMode.VERTICAL_FAST));
+
+        // Open floor, but the player cannot reach the only usable piston cell: that is a more
+        // specific answer than "blocked", and it is what the player is told.
+        FakeWorldView unreachable = new FakeWorldView()
+                .fill(-4, -4, -4, 4, 0, 4)
+                .eye(0.5D, 2.6D, 3.5D)
+                .unreachable(TARGET.above());
+        assertEquals(PlanResult.Reason.OUT_OF_REACH,
+                reasonFor(unreachable, TARGET, PlanMode.VERTICAL_FAST));
+    }
+
+    @Test
+    @DisplayName("reason ordering ranks later checks as more informative")
+    void reasonOrdering() {
+        assertTrue(PlanResult.Reason.NO_LINE_OF_SIGHT
+                .isMoreInformativeThan(PlanResult.Reason.CELL_BLOCKED));
+        assertTrue(PlanResult.Reason.TORCH_WONT_SURVIVE
+                .isMoreInformativeThan(PlanResult.Reason.OUT_OF_REACH));
+        assertTrue(!PlanResult.Reason.NO_FREE_FACE
+                .isMoreInformativeThan(PlanResult.Reason.CELL_BLOCKED));
+    }
+
+    @Test
+    @DisplayName("every reason has a distinct translation key")
+    void reasonsHaveTranslationKeys() {
+        java.util.Set<String> keys = new java.util.HashSet<>();
+        for (PlanResult.Reason reason : PlanResult.Reason.values()) {
+            String key = reason.translationKey();
+            assertTrue(key.startsWith("badghost.reason."), key);
+            assertTrue(keys.add(key), "duplicate key " + key);
+        }
     }
 
     @Test

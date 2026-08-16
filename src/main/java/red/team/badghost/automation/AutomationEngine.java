@@ -18,8 +18,10 @@ import net.neoforged.neoforge.client.event.ClientTickEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import org.jetbrains.annotations.Nullable;
 import red.team.badghost.config.BadghostConfig;
+import red.team.badghost.automation.preview.PreviewService;
 import red.team.badghost.core.ClientContext;
 import red.team.badghost.core.ModState;
+import red.team.badghost.core.SessionStats;
 import red.team.badghost.utils.InventoryHelper;
 import red.team.badghost.utils.PlayerLookUtils;
 import red.team.badghost.visuals.KeyBindings;
@@ -61,8 +63,13 @@ public final class AutomationEngine {
         return tasksView;
     }
 
+    /** True when any queued task needs {@code pos}; for previewing a target nobody owns yet. */
+    public static boolean isOccupiedByAny(BlockPos pos) {
+        return isOccupiedByOther(null, pos);
+    }
+
     /** Used by the planner so two tasks never fight over the same cell. */
-    public static boolean isOccupiedByOther(MinerTask self, BlockPos pos) {
+    public static boolean isOccupiedByOther(@Nullable MinerTask self, BlockPos pos) {
         for (int i = 0; i < tasks.size(); i++) {
             MinerTask task = tasks.get(i);
             if (task != self && task.occupies(pos)) {
@@ -91,6 +98,8 @@ public final class AutomationEngine {
     public static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
         tasks.clear();
         restorePending = false;
+        PreviewService.clear();
+        SessionStats.reset();
         InventoryHelper.reset();
         ModState.onJoinWorld();
     }
@@ -100,6 +109,7 @@ public final class AutomationEngine {
         tasks.clear();
         // The inventory goes with the world; a pending restore cannot and must not survive it.
         restorePending = false;
+        PreviewService.clear();
         PlayerLookUtils.release();
         InventoryHelper.reset();
         ModState.onLeaveWorld();
@@ -120,6 +130,7 @@ public final class AutomationEngine {
 
         PlayerLookUtils.tick();
         handleToggleKey();
+        PreviewService.tick();
 
         // A swap needs the survival inventory menu, so handing the off hand back fails while a
         // screen is open. Keep trying until it lands, whether or not the miner is still armed.
@@ -188,8 +199,13 @@ public final class AutomationEngine {
             if (!task.isComplete()) {
                 continue;
             }
-            if (!task.succeeded() && task.getFailure() != null) {
-                message(Component.translatable(task.getFailure()));
+            if (task.succeeded()) {
+                SessionStats.recordBroken(task.ticksSpent());
+            } else {
+                SessionStats.recordFailed();
+                if (task.getFailure() != null) {
+                    message(Component.translatable(task.getFailure()));
+                }
             }
             tasks.remove(i--);
         }

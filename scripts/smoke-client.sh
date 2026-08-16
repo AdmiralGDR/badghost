@@ -58,7 +58,15 @@ forbid() {
 }
 
 require "Selecting config badghost.mixins.json" "mixin config selected"
-require "Mixing ServerboundMovePlayerPacketMixin from badghost.mixins.json into" "mixin applied to its target"
+# Any of ours applying proves the config is live. Naming one specifically is wrong here: the
+# movement-packet mixin only applies once a world is joined, which a main-menu run never does,
+# so requiring it made the result depend on how far the client happened to get.
+if grep -qE "Mixing [A-Za-z]+ from badghost\.mixins\.json into" "${LOG}"; then
+    echo "ok      mixin applied ($(grep -cE 'Mixing [A-Za-z]+ from badghost\.mixins\.json into' "${LOG}") target(s))"
+else
+    echo "MISSING mixin applied to any target" >&2
+    fail=1
+fi
 
 # Written by the mod constructor, so its presence proves the entry point ran.
 if [ -f run/config/badghost-client.toml ]; then

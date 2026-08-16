@@ -17,6 +17,7 @@ public final class BadghostConfig {
     public static final ModConfigSpec.BooleanValue DISABLE_NEGATIVES;
     public static final ModConfigSpec.DoubleValue MODEL_OFFSET;
     public static final ModConfigSpec.DoubleValue CAMERA_DISTANCE;
+    public static final ModConfigSpec.IntValue GHOST_LIMIT;
 
     // Bedrock miner
     public static final ModConfigSpec.BooleanValue AUTOMATION_ENABLED;
@@ -27,6 +28,9 @@ public final class BadghostConfig {
     public static final ModConfigSpec.IntValue WAIT_TICKS;
     public static final ModConfigSpec.IntValue ROTATE_SETTLE_TICKS;
     public static final ModConfigSpec.BooleanValue SKIP_INSTAMINE_CHECK;
+
+    // Preview
+    public static final ModConfigSpec.BooleanValue PREVIEW_ENABLED;
 
     // Auto scan
     public static final ModConfigSpec.BooleanValue AUTO_SCAN_ENABLED;
@@ -45,11 +49,28 @@ public final class BadghostConfig {
         GHOST_BLOCK = builder
                 .comment("Block id placed by the ghost-block key. Invalid ids are ignored.")
                 .define("ghostBlock", "minecraft:bedrock");
-        FROZEN_SLIPPERY = builder.define("frozenSlippery", false);
-        BOUNCY = builder.define("bouncy", false);
-        DISABLE_NEGATIVES = builder.define("disableNegatives", false);
+        FROZEN_SLIPPERY = builder
+                .comment("Ghost blocks are as slippery as ice to walk on. Client-side only:",
+                        "the server still moves you by the real block underneath.")
+                .define("frozenSlippery", false);
+        BOUNCY = builder
+                .comment("Ghost blocks bounce like a slime block. Client-side only.")
+                .define("bouncy", false);
+        DISABLE_NEGATIVES = builder
+                .comment("Stop nausea from swirling the view and stop blindness or darkness from",
+                        "collapsing the fog to arm's length.",
+                        "Only the picture changes: the effects are the server's, keep their full",
+                        "duration and every other consequence they have.")
+                .define("disableNegatives", false);
         MODEL_OFFSET = builder.defineInRange("modelOffset", 0.0D, -10.0D, 10.0D);
-        CAMERA_DISTANCE = builder.defineInRange("cameraDistance", 4.0D, 1.0D, 100.0D);
+        CAMERA_DISTANCE = builder
+                .comment("Third-person camera distance. Vanilla is 4.0; larger pulls the camera back.",
+                        "It still stops at whatever it would collide with.")
+                .defineInRange("cameraDistance", 4.0D, 1.0D, 100.0D);
+        GHOST_LIMIT = builder
+                .comment("How many ghost blocks may exist at once, so holding the key cannot",
+                        "fill the client's world without bound.")
+                .defineInRange("ghostLimit", 256, 1, 4096);
         builder.pop();
 
         builder.push("Automation");
@@ -81,6 +102,14 @@ public final class BadghostConfig {
                 .comment("Accept the fastest available tool even if it cannot instantly break a",
                         "piston. The glitch will usually fail; for debugging only.")
                 .define("skipInstaMineCheck", false);
+        builder.pop();
+
+        builder.push("Preview");
+        PREVIEW_ENABLED = builder
+                .comment("While the miner is armed, outline what it would build around the block you",
+                        "are looking at — or which cell is in the way when it cannot be mined.",
+                        "Nothing is placed or broken by the preview.")
+                .define("previewEnabled", true);
         builder.pop();
 
         builder.push("AutoScan");

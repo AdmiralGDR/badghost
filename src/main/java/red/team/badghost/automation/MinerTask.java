@@ -17,8 +17,10 @@ import red.team.badghost.automation.plan.LevelWorldView;
 import red.team.badghost.automation.plan.MiningPlan;
 import red.team.badghost.automation.plan.PlanFinder;
 import red.team.badghost.automation.plan.PlanMode;
+import red.team.badghost.automation.plan.PlanResult;
 import red.team.badghost.config.BadghostConfig;
 import red.team.badghost.core.ClientContext;
+import red.team.badghost.core.SessionStats;
 import red.team.badghost.utils.InteractionHelper;
 import red.team.badghost.utils.InventoryHelper;
 import red.team.badghost.utils.PlayerLookUtils;
@@ -96,6 +98,11 @@ public final class MinerTask {
         return plan;
     }
 
+    /** Ticks this task has lived, for the session average. */
+    public int ticksSpent() {
+        return totalTicks;
+    }
+
     public boolean isComplete() {
         return state == TaskState.COMPLETE || state == TaskState.FAIL;
     }
@@ -164,6 +171,7 @@ public final class MinerTask {
                 stepTicks = 0;
                 chargeRotated = false;
                 toolSettled = false;
+                SessionStats.recordAttempt();
                 state = TaskState.FIND_PLAN;
             }
             case FIND_PLAN -> findPlan();
@@ -200,11 +208,14 @@ public final class MinerTask {
         LevelWorldView view = new LevelWorldView(
                 level, player, supportBlock(), pos -> AutomationEngine.isOccupiedByOther(this, pos));
 
-        plan = PlanFinder.find(view, target, mode);
-        if (plan == null) {
-            abandon("badghost.message.no_space");
+        PlanResult result = PlanFinder.find(view, target, mode);
+        if (result instanceof PlanResult.Rejected rejected) {
+            // Report what actually stood in the way rather than a blanket "no room".
+            abandon(rejected.reason().translationKey());
             return;
         }
+
+        plan = ((PlanResult.Ok) result).plan();
         state = plan.supportPos() != null ? TaskState.PLACE_SUPPORT : TaskState.PLACE_TORCH;
     }
 

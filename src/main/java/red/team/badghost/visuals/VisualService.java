@@ -7,9 +7,11 @@ import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.phys.HitResult;
 import net.neoforged.bus.api.EventPriority;
@@ -22,9 +24,8 @@ import red.team.badghost.config.BadghostConfig;
 import red.team.badghost.core.ClientContext;
 import red.team.badghost.core.ModState;
 
-import java.util.HashSet;
 import java.util.Iterator;
-import java.util.Set;
+import java.util.List;
 
 /** Client-only fake blocks, with a particle aura so they can be told apart from real ones. */
 public final class VisualService {
@@ -33,7 +34,11 @@ public final class VisualService {
     private static final double PLACE_RANGE_SQR = 36.0D;
     private static final double AURA_RANGE = 32.0D;
 
-    private static final Set<BlockPos> ghostBlocks = new HashSet<>();
+    /** Ticks between "ghost budget full" notices. */
+    private static final int LIMIT_WARN_TICKS = 60;
+
+    private static int limitWarnCooldown;
+
 
     private static String cachedBlockId;
     @Nullable
@@ -42,7 +47,7 @@ public final class VisualService {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         if (ClientContext.isInvalid()) {
-            ghostBlocks.clear();
+            GhostBlockRegistry.clear();
             return;
         }
 
@@ -58,6 +63,15 @@ public final class VisualService {
             return;
         }
 
+        if (limitWarnCooldown > 0) {
+            limitWarnCooldown--;
+        }
+        while (KeyBindings.UNDO_GHOST_BLOCK.consumeClick()) {
+            undoLast();
+        }
+        while (KeyBindings.CLEAR_GHOST_BLOCKS.consumeClick()) {
+            clearAll();
+        }
         if (KeyBindings.PLACE_GHOST_BLOCK.isDown()) {
             placeGhostBlock(mc, player, level, ghostBlock);
         }
@@ -94,18 +108,25 @@ public final class VisualService {
             targetPos = player.blockPosition().below();
         }
 
-        if (level.getBlockState(targetPos).is(ghostBlock) || !level.getBlockState(targetPos).canBeReplaced()) {
+        BlockState existing = level.getBlockState(targetPos);
+        if (existing.is(ghostBlock) || !existing.canBeReplaced()) {
             return;
         }
-        level.setBlock(targetPos, ghostBlock.defaultBlockState(), Block.UPDATE_ALL);
-        ghostBlocks.add(targetPos.immutable());
+        BlockState ghostState = ghostBlock.defaultBlockState();
+        // Record what was covered before faking over it, so removal can put it back exactly.
+        if (!GhostBlockRegistry.add(targetPos, ghostState, existing, BadghostConfig.GHOST_LIMIT.get())) {
+            warnLimitReached(player);
+            return;
+        }
+        level.setBlock(targetPos, ghostState, Block.UPDATE_ALL);
     }
 
     private static void spawnAura(LocalPlayer player, ClientLevel level, Block ghostBlock) {
-        Iterator<BlockPos> it = ghostBlocks.iterator();
+        Iterator<BlockPos> it = GhostBlockRegistry.positions().iterator();
         while (it.hasNext()) {
             BlockPos pos = it.next();
             if (!level.getBlockState(pos).is(ghostBlock)) {
+                // The server corrected it, or the player broke it: stop tracking.
                 it.remove();
                 continue;
             }
@@ -116,6 +137,44 @@ public final class VisualService {
             double y = pos.getY() + 1.0D + level.random.nextDouble() * 0.5D;
             double z = pos.getZ() + level.random.nextDouble();
             level.addParticle(ParticleTypes.ENCHANT, x, y, z, 0.0D, 0.1D, 0.0D);
+        }
+    }
+
+    /** Says once per cooldown that the ghost budget is full, rather than every tick. */
+    private static void warnLimitReached(LocalPlayer player) {
+        if (limitWarnCooldown > 0) {
+            return;
+        }
+        limitWarnCooldown = LIMIT_WARN_TICKS;
+        player.displayClientMessage(
+                Component.translatable("badghost.message.ghost_limit", GhostBlockRegistry.size()), true);
+    }
+
+    /** Removes the newest ghost block, restoring what it covered. */
+    public static void undoLast() {
+        ClientLevel level = ClientContext.getLevel();
+        BlockPos pos = GhostBlockRegistry.lastPlaced();
+        if (level == null || pos == null) {
+            return;
+        }
+        BlockState original = GhostBlockRegistry.remove(pos);
+        if (original != null) {
+            level.setBlock(pos, original, Block.UPDATE_ALL);
+        }
+    }
+
+    /** Removes every ghost block, restoring what each covered. */
+    public static void clearAll() {
+        ClientLevel level = ClientContext.getLevel();
+        if (level == null) {
+            GhostBlockRegistry.clear();
+            return;
+        }
+        for (BlockPos pos : List.copyOf(GhostBlockRegistry.positions())) {
+            BlockState original = GhostBlockRegistry.remove(pos);
+            if (original != null) {
+                level.setBlock(pos, original, Block.UPDATE_ALL);
+            }
         }
     }
 
@@ -135,12 +194,14 @@ public final class VisualService {
         }
 
         BlockPos pos = event.getPos();
-        if (!ghostBlocks.remove(pos)) {
+        BlockState original = GhostBlockRegistry.remove(pos);
+        if (original == null) {
             return;
         }
         ClientLevel level = ClientContext.getLevel();
         if (level != null) {
-            level.setBlock(pos, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            // Restore what the ghost covered rather than punching a hole in the client's world.
+            level.setBlock(pos, original, Block.UPDATE_ALL);
         }
         event.setCanceled(true);
     }

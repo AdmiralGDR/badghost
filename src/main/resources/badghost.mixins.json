@@ -3,10 +3,12 @@
   "minVersion": "0.8",
   "package": "red.team.badghost.mixin",
   "compatibilityLevel": "JAVA_21",
-  "mixins": [
-  ],
+  "mixins": [],
   "client": [
-    "ServerboundMovePlayerPacketMixin"
+    "ServerboundMovePlayerPacketMixin",
+    "BlockFrictionMixin",
+    "EntityBounceMixin",
+    "ConfusionOverlayMixin"
   ],
   "injectors": {
     "defaultRequire": 1

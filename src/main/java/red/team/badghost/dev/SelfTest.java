@@ -5,8 +5,10 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.multiplayer.ClientPacketListener;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import org.slf4j.Logger;
@@ -19,6 +21,9 @@ import red.team.badghost.config.BadghostConfig;
 import red.team.badghost.core.ClientContext;
 import red.team.badghost.core.ModState;
 import red.team.badghost.utils.InventoryHelper;
+import red.team.badghost.visuals.GhostBlockRegistry;
+import red.team.badghost.visuals.GhostPhysics;
+import red.team.badghost.visuals.NegativeEffectFilter;
 
 import java.util.List;
 import java.util.function.Consumer;
@@ -68,6 +73,9 @@ public final class SelfTest {
             Blocks.PISTON, Blocks.STICKY_PISTON, Blocks.MOVING_PISTON,
             Blocks.REDSTONE_TORCH, Blocks.REDSTONE_WALL_TORCH, Blocks.SLIME_BLOCK);
 
+    /** Where the physics check fakes its ghost block: on the floor, clear of the mining area. */
+    private static final BlockPos GHOST_POS = new BlockPos(OX + 4, FLOOR_Y, OZ + 4);
+
     /** The ceiling target sits above head height; VERTICAL_FAST must plan the piston below it. */
     private static final BlockPos CEILING_TARGET = new BlockPos(OX, FLOOR_Y + 3, OZ);
 
@@ -81,7 +89,7 @@ public final class SelfTest {
             new Scenario("abort-leaves-nothing", PlanMode.VERTICAL_FAST, new BlockPos(OX, FLOOR_Y, OZ),
                     SelfTest::buildFloor, true));
 
-    private enum Phase { WAIT_WORLD, EQUIP, BUILD, ARM, WATCH, NEXT, DONE }
+    private enum Phase { WAIT_WORLD, EQUIP, BUILD, ARM, WATCH, NEXT, EFFECTS, EFFECTS_CHECK, PHYSICS, PHYSICS_FRICTION, PHYSICS_BOUNCE, DONE }
 
     private static Phase phase = Phase.WAIT_WORLD;
     private static int scenarioIndex;
@@ -120,12 +128,18 @@ public final class SelfTest {
             case NEXT -> after(SETTLE_TICKS, () -> {
                 scenarioIndex++;
                 if (scenarioIndex >= SCENARIOS.size()) {
-                    finishAll();
+                    startEffectCheck(connection);
+                    phase = Phase.EFFECTS;
                 } else {
                     startScenario(connection);
                     phase = Phase.BUILD;
                 }
             });
+            case EFFECTS -> after(SETTLE_TICKS, () -> phase = Phase.EFFECTS_CHECK);
+            case EFFECTS_CHECK -> checkEffectsSuppressed();
+            case PHYSICS -> after(SETTLE_TICKS, () -> phase = Phase.PHYSICS_FRICTION);
+            case PHYSICS_FRICTION -> checkFriction(connection);
+            case PHYSICS_BOUNCE -> after(SETTLE_TICKS, SelfTest::checkBounce);
             case DONE -> { }
         }
     }
@@ -344,6 +358,97 @@ public final class SelfTest {
             }
         }
         return found;
+    }
+
+    /**
+     * Applies real nausea and blindness with the suppression on, so the next phase can check the
+     * suppression actually ran rather than assuming it would.
+     */
+    private static void startEffectCheck(ClientPacketListener connection) {
+        LOGGER.info("{}: --- checking negative-effect suppression ---", TAG);
+        NegativeEffectFilter.reset();
+        BadghostConfig.DISABLE_NEGATIVES.set(true);
+        connection.sendCommand("effect clear @s");
+        connection.sendCommand("effect give @s minecraft:nausea 30 0 true");
+        connection.sendCommand("effect give @s minecraft:blindness 30 0 true");
+    }
+
+    private static void checkEffectsSuppressed() {
+        boolean nausea = NegativeEffectFilter.has(MobEffects.CONFUSION);
+        boolean blind = NegativeEffectFilter.has(MobEffects.BLINDNESS);
+        int nauseaHits = NegativeEffectFilter.nauseaSuppressedCount();
+        int fogHits = NegativeEffectFilter.fogSuppressedCount();
+        LOGGER.info("{}: effects active nausea={} blindness={}; suppressed nausea={} fog={}",
+                TAG, nausea, blind, nauseaHits, fogHits);
+
+        if (!nausea || !blind) {
+            fail("the effects were not applied, so suppression could not be judged");
+            return;
+        }
+        if (nauseaHits == 0) {
+            fail("nausea is active but its overlay was never suppressed");
+            return;
+        }
+        if (fogHits == 0) {
+            fail("blindness is active but the fog was never pushed back");
+            return;
+        }
+        LOGGER.info("{}: negative-effect suppression PASS — nausea overlay and blindness fog both suppressed", TAG);
+        BadghostConfig.DISABLE_NEGATIVES.set(false);
+        startPhysicsCheck();
+        phase = Phase.PHYSICS;
+    }
+
+    /** Fakes a ghost block on the floor and stands the player on it, both properties enabled. */
+    private static void startPhysicsCheck() {
+        LOGGER.info("{}: --- checking ghost-block ice and slime ---", TAG);
+        GhostPhysics.reset();
+        BadghostConfig.FROZEN_SLIPPERY.set(true);
+        BadghostConfig.BOUNCY.set(true);
+
+        ClientLevel level = ClientContext.getLevel();
+        LocalPlayer player = ClientContext.getPlayer();
+        if (level == null || player == null) {
+            fail("no world for the physics check");
+            return;
+        }
+        // Registered exactly the way the ghost-block key does it, so the mixins see what they
+        // would see in normal play.
+        BlockState ghost = Blocks.BEDROCK.defaultBlockState();
+        BlockState covered = level.getBlockState(GHOST_POS);
+        GhostBlockRegistry.add(GHOST_POS, ghost, covered, BadghostConfig.GHOST_LIMIT.get());
+        level.setBlock(GHOST_POS, ghost, net.minecraft.world.level.block.Block.UPDATE_ALL);
+
+        player.connection.sendCommand(String.format("tp @s %d %d %d -90 0",
+                GHOST_POS.getX(), GHOST_POS.getY() + 1, GHOST_POS.getZ()));
+    }
+
+    /** Standing on the ghost must report ice friction; then drop the player to test the bounce. */
+    private static void checkFriction(ClientPacketListener connection) {
+        int hits = GhostPhysics.frictionAppliedCount();
+        LOGGER.info("{}: ghost friction applied {} time(s)", TAG, hits);
+        if (hits == 0) {
+            fail("standing on a slippery ghost block never reported ice friction");
+            return;
+        }
+        LOGGER.info("{}: ice PASS — ghost block reports friction {}", TAG, GhostPhysics.slipperyFriction());
+        // Drop from a height so the landing goes through the fall handler the bounce redirects.
+        connection.sendCommand(String.format("tp @s %d %d %d -90 0",
+                GHOST_POS.getX(), GHOST_POS.getY() + 6, GHOST_POS.getZ()));
+        phase = Phase.PHYSICS_BOUNCE;
+    }
+
+    private static void checkBounce() {
+        int hits = GhostPhysics.bounceAppliedCount();
+        LOGGER.info("{}: ghost bounce applied {} time(s)", TAG, hits);
+        if (hits == 0) {
+            fail("landing on a bouncy ghost block never bounced");
+            return;
+        }
+        LOGGER.info("{}: slime PASS — landing on a ghost block bounced", TAG);
+        BadghostConfig.FROZEN_SLIPPERY.set(false);
+        BadghostConfig.BOUNCY.set(false);
+        finishAll();
     }
 
     // -- verdict --

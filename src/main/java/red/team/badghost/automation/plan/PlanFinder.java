@@ -4,6 +4,9 @@ package red.team.badghost.automation.plan;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import org.jetbrains.annotations.Nullable;
+import red.team.badghost.automation.plan.PlanResult.Ok;
+import red.team.badghost.automation.plan.PlanResult.Reason;
+import red.team.badghost.automation.plan.PlanResult.Rejected;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -13,8 +16,8 @@ import java.util.List;
  * Picks where to build the mechanism around a target block.
  *
  * <p>Candidates are scored 0 (best) to 3; the search returns as soon as a perfect one is found,
- * otherwise the best of what it saw. Anything the server would reject scores {@code null} and
- * is dropped, which is the difference between a plan that works and one that silently fails.</p>
+ * otherwise the best of what it saw. A candidate the server would reject is dropped along with
+ * the reason, and when nothing fits at all the most informative reason is reported back.</p>
  */
 public final class PlanFinder {
     private PlanFinder() {}
@@ -25,48 +28,78 @@ public final class PlanFinder {
     /** Faces considered per search; matches the upstream mod. */
     private static final int MAX_FACES = 5;
 
-    @Nullable
-    public static MiningPlan find(WorldView view, BlockPos target, PlanMode mode) {
-        // Shared across every face: a perfect plan on a far face beats a compromised one on a
-        // near face, so the fallback may only be taken once the whole search is exhausted.
-        MiningPlan[] byQuality = new MiningPlan[QUALITY_LEVELS];
+    /** Accumulates the runner-up plans and the most telling rejection across the whole search. */
+    private static final class Search {
+        private final MiningPlan[] byQuality = new MiningPlan[QUALITY_LEVELS];
+        private Reason reason = Reason.NO_FREE_FACE;
+        private BlockPos where;
+
+        void note(Rejected rejected) {
+            if (where == null || rejected.reason().isMoreInformativeThan(reason)) {
+                reason = rejected.reason();
+                where = rejected.where();
+            }
+        }
+
+        void keep(MiningPlan plan, int quality) {
+            if (byQuality[quality] == null) {
+                byQuality[quality] = plan;
+            }
+        }
+
+        PlanResult finish(BlockPos target) {
+            for (int quality = 0; quality < byQuality.length; quality++) {
+                if (byQuality[quality] != null) {
+                    return new Ok(byQuality[quality], quality);
+                }
+            }
+            return new Rejected(reason, where == null ? target : where);
+        }
+    }
+
+    /** Finds the best mechanism, or explains why there is none. */
+    public static PlanResult find(WorldView view, BlockPos target, PlanMode mode) {
+        Search search = new Search();
 
         for (Direction face : orderFaces(view, target, mode.faces())) {
             BlockPos pistonPos = target.relative(face);
             if (!view.isReplaceable(pistonPos)) {
+                search.note(new Rejected(Reason.CELL_BLOCKED, pistonPos));
                 continue;
             }
-            MiningPlan perfect = searchFace(view, target, face, pistonPos, mode, byQuality);
+            // A perfect plan on a far face beats a compromised one on a near face, so the
+            // runner-ups are only consulted once the whole search is exhausted.
+            MiningPlan perfect = searchFace(view, target, face, pistonPos, mode, search);
             if (perfect != null) {
-                return perfect;
+                return new Ok(perfect, 0);
             }
         }
-
-        for (MiningPlan plan : byQuality) {
-            if (plan != null) {
-                return plan;
-            }
-        }
-        return null;
+        return search.finish(target);
     }
 
     @Nullable
     private static MiningPlan searchFace(WorldView view, BlockPos target, Direction face,
-                                         BlockPos pistonPos, PlanMode mode, MiningPlan[] byQuality) {
+                                         BlockPos pistonPos, PlanMode mode, Search search) {
         Direction pushDir = face.getOpposite();
 
         for (Direction extendDir : orderExtendDirs(view, pistonPos, mode.extendDirs())) {
             if (!view.isPushable(pistonPos, extendDir)) {
+                search.note(new Rejected(Reason.PISTON_WONT_FIT, pistonPos));
                 continue;
             }
             BlockPos extendPos = pistonPos.relative(extendDir);
             if (!view.isReplaceable(extendPos)) {
+                search.note(new Rejected(Reason.CELL_BLOCKED, extendPos));
                 continue;
             }
 
             for (Direction torchDir : orderTorchDirs(view, pistonPos)) {
                 BlockPos torchPos = pistonPos.relative(torchDir);
-                if (torchPos.equals(extendPos) || !view.isReplaceable(torchPos)) {
+                if (torchPos.equals(extendPos)) {
+                    continue;
+                }
+                if (!view.isReplaceable(torchPos)) {
+                    search.note(new Rejected(Reason.CELL_BLOCKED, torchPos));
                     continue;
                 }
 
@@ -74,12 +107,12 @@ public final class PlanFinder {
                 // torch direction of every extend direction of every face, and the supported
                 // variant is never even built when the plain one is already perfect.
                 MiningPlan perfect = consider(view,
-                        new MiningPlan(target, pistonPos, extendDir, pushDir, torchPos, null), byQuality);
+                        new MiningPlan(target, pistonPos, extendDir, pushDir, torchPos, null), search);
                 if (perfect != null) {
                     return perfect;
                 }
                 perfect = consider(view,
-                        new MiningPlan(target, pistonPos, extendDir, pushDir, torchPos, torchPos.below()), byQuality);
+                        new MiningPlan(target, pistonPos, extendDir, pushDir, torchPos, torchPos.below()), search);
                 if (perfect != null) {
                     return perfect;
                 }
@@ -94,74 +127,91 @@ public final class PlanFinder {
      * @return the candidate when it is perfect and the search can stop, otherwise {@code null}.
      */
     @Nullable
-    private static MiningPlan consider(WorldView view, MiningPlan candidate, MiningPlan[] byQuality) {
-        Integer quality = quality(view, candidate);
-        if (quality == null) {
+    private static MiningPlan consider(WorldView view, MiningPlan candidate, Search search) {
+        PlanResult result = evaluate(view, candidate);
+        if (result instanceof Rejected rejected) {
+            search.note(rejected);
             return null;
         }
-        if (quality == 0) {
+        Ok ok = (Ok) result;
+        if (ok.quality() == 0) {
             return candidate;
         }
-        if (byQuality[quality] == null) {
-            byQuality[quality] = candidate;
-        }
+        search.keep(candidate, ok.quality());
         return null;
     }
 
     /**
-     * {@code null} means unusable. Lower is better: 3 means the piston position is already
+     * Judges one candidate. Lower quality is better: 3 means the piston position is already
      * powered, 2 means the player stands where the head has to go, 1 means a support block has
      * to be spent.
      */
-    @Nullable
-    static Integer quality(WorldView view, MiningPlan plan) {
+    static PlanResult evaluate(WorldView view, MiningPlan plan) {
         BlockPos extendPos = plan.extendPos();
+        BlockPos support = plan.supportPos();
 
         // Every guard below must pass, so their order does not change the verdict — only how
         // much work a doomed candidate costs. Line of sight is by far the dearest (a raycast per
         // face of a position) and the search can evaluate hundreds of candidates in one tick, so
         // it runs last, after the set lookups and the block-state and geometry checks.
-        if (view.isOccupied(plan.pistonPos()) || view.isOccupied(plan.torchPos()) || view.isOccupied(extendPos)) {
-            return null;
+        if (view.isOccupied(plan.pistonPos())) {
+            return new Rejected(Reason.OCCUPIED_BY_TASK, plan.pistonPos());
         }
-        if (plan.supportPos() != null && view.isOccupied(plan.supportPos())) {
-            return null;
+        if (view.isOccupied(plan.torchPos())) {
+            return new Rejected(Reason.OCCUPIED_BY_TASK, plan.torchPos());
         }
-        if (!view.isReplaceable(extendPos) || !view.isReplaceable(plan.torchPos())) {
-            return null;
+        if (view.isOccupied(extendPos)) {
+            return new Rejected(Reason.OCCUPIED_BY_TASK, extendPos);
         }
-        if (!view.isReachable(plan.pistonPos()) || !view.isReachable(plan.torchPos())) {
-            return null;
+        if (support != null && view.isOccupied(support)) {
+            return new Rejected(Reason.OCCUPIED_BY_TASK, support);
         }
-        if (plan.supportPos() != null && !view.isReachable(plan.supportPos())) {
-            return null;
+        if (!view.isReplaceable(extendPos)) {
+            return new Rejected(Reason.CELL_BLOCKED, extendPos);
+        }
+        if (!view.isReplaceable(plan.torchPos())) {
+            return new Rejected(Reason.CELL_BLOCKED, plan.torchPos());
+        }
+        if (!view.isReachable(plan.pistonPos())) {
+            return new Rejected(Reason.OUT_OF_REACH, plan.pistonPos());
+        }
+        if (!view.isReachable(plan.torchPos())) {
+            return new Rejected(Reason.OUT_OF_REACH, plan.torchPos());
+        }
+        if (support != null && !view.isReachable(support)) {
+            return new Rejected(Reason.OUT_OF_REACH, support);
         }
         if (!view.canPlacePiston(plan.pistonPos())) {
-            return null;
+            return new Rejected(Reason.PISTON_WONT_FIT, plan.pistonPos());
         }
-        if (plan.supportPos() == null) {
+        if (support == null) {
             if (!view.torchCanSurvive(plan.torchPos())) {
-                return null;
+                return new Rejected(Reason.TORCH_WONT_SURVIVE, plan.torchPos());
             }
-        } else if (!view.isReplaceable(plan.supportPos()) || !view.canPlaceSupport(plan.supportPos())) {
+        } else {
             // A support is only worth planning into empty space: anything already standing
             // there belongs to the player and must not be disturbed.
-            return null;
+            if (!view.isReplaceable(support) || !view.canPlaceSupport(support)) {
+                return new Rejected(Reason.SUPPORT_WONT_FIT, support);
+            }
         }
-        if (!view.isVisible(plan.pistonPos()) || !view.isVisible(plan.torchPos())) {
-            return null;
+        if (!view.isVisible(plan.pistonPos())) {
+            return new Rejected(Reason.NO_LINE_OF_SIGHT, plan.pistonPos());
         }
-        if (plan.supportPos() != null && !view.isVisible(plan.supportPos())) {
-            return null;
+        if (!view.isVisible(plan.torchPos())) {
+            return new Rejected(Reason.NO_LINE_OF_SIGHT, plan.torchPos());
+        }
+        if (support != null && !view.isVisible(support)) {
+            return new Rejected(Reason.NO_LINE_OF_SIGHT, support);
         }
 
         if (view.hasSignal(plan.pistonPos())) {
-            return 3;
+            return new Ok(plan, 3);
         }
         if (view.intersectsPlayer(extendPos)) {
-            return 2;
+            return new Ok(plan, 2);
         }
-        return plan.supportPos() != null ? 1 : 0;
+        return new Ok(plan, support != null ? 1 : 0);
     }
 
     /**

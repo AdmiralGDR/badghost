@@ -2,20 +2,25 @@
   "category.badghost.general": "BadGhost",
   "key.badghost.createghostblock": "Create Ghost Block",
   "key.badghost.toggleautomation": "Toggle Bedrock Miner",
-
   "badghost.hud.title": "[BadGhost] Bedrock Miner: ON",
   "badghost.hud.queue": "Queue: %s",
   "badghost.hud.queue_full": "Queue: %s (FULL)",
   "badghost.hud.status": "Status: %s",
   "badghost.hud.idle": "Status: IDLE (waiting for targets)",
-
   "badghost.req.piston": "piston",
   "badghost.req.torch": "redstone torch",
   "badghost.req.survival": "survival mode",
   "badghost.req.tool": "insta-mine pickaxe (Efficiency V + Haste II)",
   "badghost.req.count": "%s %sx (have %s)",
   "badghost.message.missing": "Missing: %s",
-
+  "badghost.reason.no_free_face": "No free side around the target",
+  "badghost.reason.occupied_by_task": "Another queued target is using that space",
+  "badghost.reason.cell_blocked": "No room: a needed space is occupied",
+  "badghost.reason.out_of_reach": "Out of reach — move closer",
+  "badghost.reason.piston_wont_fit": "A piston cannot be placed there",
+  "badghost.reason.torch_wont_survive": "The torch has nothing to stand on",
+  "badghost.reason.support_wont_fit": "The support block does not fit under the torch",
+  "badghost.reason.no_line_of_sight": "No line of sight — something is in the way",
   "badghost.message.enabled": "Bedrock Miner enabled",
   "badghost.message.disabled": "Bedrock Miner disabled",
   "badghost.message.survival_only": "Survival mode only",
@@ -28,5 +33,10 @@
   "badghost.message.place_failed": "Placement was rejected",
   "badghost.message.piston_stuck": "Piston did not extend in time",
   "badghost.message.breaking_failed": "Could not break the target",
-  "badghost.message.timeout": "Target timed out"
+  "badghost.message.timeout": "Target timed out",
+  "key.badghost.undoghostblock": "Undo Last Ghost Block",
+  "key.badghost.clearghostblocks": "Clear All Ghost Blocks",
+  "badghost.message.ghost_limit": "Ghost block limit reached (%s)",
+  "badghost.hud.stats": "Session: %s broken, %s failed, %s tries each, %ss avg",
+  "badghost.config.disableNegatives": "Hide nausea swirl and blindness fog"
 }

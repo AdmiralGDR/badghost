@@ -8,10 +8,13 @@ import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
 import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
+import net.neoforged.neoforge.client.gui.ConfigurationScreen;
+import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.common.NeoForge;
 import red.team.badghost.automation.AutomationEngine;
 import red.team.badghost.config.BadghostConfig;
+import red.team.badghost.visuals.CameraService;
 import red.team.badghost.visuals.EspRenderer;
 import red.team.badghost.visuals.KeyBindings;
 import red.team.badghost.visuals.MinerHUD;
@@ -23,6 +26,9 @@ public final class Badghost {
 
     public Badghost(IEventBus modEventBus, ModContainer modContainer) {
         modContainer.registerConfig(ModConfig.Type.CLIENT, BadghostConfig.SPEC);
+        // Every option becomes an in-game widget with its range and comment, generated from the
+        // spec itself — so the settings can no longer drift from what the config actually holds.
+        modContainer.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
 
         modEventBus.addListener(KeyBindings::onRegisterKeyMappings);
         modEventBus.addListener(Badghost::registerGuiLayers);
@@ -30,6 +36,7 @@ public final class Badghost {
         NeoForge.EVENT_BUS.register(VisualService.class);
         NeoForge.EVENT_BUS.register(AutomationEngine.class);
         NeoForge.EVENT_BUS.register(EspRenderer.class);
+        NeoForge.EVENT_BUS.register(CameraService.class);
 
         // Development harness; the class is stripped from the released jar, and the reference
         // below is only resolved when the property is set, so the jar stays loadable without it.

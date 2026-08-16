@@ -2,20 +2,25 @@
   "category.badghost.general": "BadGhost",
   "key.badghost.createghostblock": "Поставить гостблок",
   "key.badghost.toggleautomation": "Переключить Bedrock Miner",
-
   "badghost.hud.title": "[BadGhost] Bedrock Miner: ВКЛ",
   "badghost.hud.queue": "Очередь: %s",
   "badghost.hud.queue_full": "Очередь: %s (ПОЛНА)",
   "badghost.hud.status": "Статус: %s",
   "badghost.hud.idle": "Статус: ОЖИДАНИЕ (нет целей)",
-
   "badghost.req.piston": "поршень",
   "badghost.req.torch": "красный факел",
   "badghost.req.survival": "режим выживания",
   "badghost.req.tool": "кирка мгновенного слома (Эффективность V + Спешка II)",
   "badghost.req.count": "%s %sшт (есть %s)",
   "badghost.message.missing": "Не хватает: %s",
-
+  "badghost.reason.no_free_face": "Вокруг цели нет свободной стороны",
+  "badghost.reason.occupied_by_task": "Место занято другой целью из очереди",
+  "badghost.reason.cell_blocked": "Нет места: нужная клетка занята",
+  "badghost.reason.out_of_reach": "Слишком далеко — подойди ближе",
+  "badghost.reason.piston_wont_fit": "Поршень туда не встанет",
+  "badghost.reason.torch_wont_survive": "Факелу не на чем стоять",
+  "badghost.reason.support_wont_fit": "Блок-опора не помещается под факелом",
+  "badghost.reason.no_line_of_sight": "Нет линии видимости — что-то мешает",
   "badghost.message.enabled": "Bedrock Miner включён",
   "badghost.message.disabled": "Bedrock Miner выключен",
   "badghost.message.survival_only": "Работает только в выживании",
@@ -28,5 +33,10 @@
   "badghost.message.place_failed": "Установка отклонена",
   "badghost.message.piston_stuck": "Поршень не выдвинулся вовремя",
   "badghost.message.breaking_failed": "Не удалось пробить цель",
-  "badghost.message.timeout": "Цель просрочена"
+  "badghost.message.timeout": "Цель просрочена",
+  "key.badghost.undoghostblock": "Отменить последний гостблок",
+  "key.badghost.clearghostblocks": "Убрать все гостблоки",
+  "badghost.message.ghost_limit": "Достигнут лимит гостблоков (%s)",
+  "badghost.hud.stats": "Сессия: %s пробито, %s провалов, %s попыток, %sс в среднем",
+  "badghost.config.disableNegatives": "Скрывать кружение от тошноты и туман слепоты"
 }
