@@ -344,7 +344,10 @@ public final class SelfTest {
             return;
         }
         if (AutomationEngine.getQueueSize() == 0) {
-            fail("queue drained but the bedrock is still there");
+            // The task knew why it gave up; losing that here would report the symptom only.
+            String why = AutomationEngine.lastFailure();
+            fail("queue drained but the bedrock is still there; last task failure: "
+                    + (why == null ? "<none recorded>" : why));
             return;
         }
         if (watchTicks > WATCH_LIMIT_TICKS) {

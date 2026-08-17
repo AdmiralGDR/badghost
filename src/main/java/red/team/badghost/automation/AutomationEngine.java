@@ -44,6 +44,10 @@ public final class AutomationEngine {
 
     private static int scanCooldown;
 
+    /** Why the last task gave up, kept so a caller can ask afterwards instead of guessing. */
+    @Nullable
+    private static String lastFailure;
+
     /** Set when the off hand could not be handed back yet, e.g. a screen was open. */
     private static boolean restorePending;
 
@@ -61,6 +65,12 @@ public final class AutomationEngine {
 
     public static List<MinerTask> getActiveTasks() {
         return tasksView;
+    }
+
+    /** Translation key of the last task failure, or {@code null} if none has failed. */
+    @Nullable
+    public static String lastFailure() {
+        return lastFailure;
     }
 
     /** True when any queued task needs {@code pos}; for previewing a target nobody owns yet. */
@@ -98,6 +108,7 @@ public final class AutomationEngine {
     public static void onLoggingIn(ClientPlayerNetworkEvent.LoggingIn event) {
         tasks.clear();
         restorePending = false;
+        lastFailure = null;
         PreviewService.clear();
         SessionStats.reset();
         InventoryHelper.reset();
@@ -203,8 +214,9 @@ public final class AutomationEngine {
                 SessionStats.recordBroken(task.ticksSpent());
             } else {
                 SessionStats.recordFailed();
-                if (task.getFailure() != null) {
-                    message(Component.translatable(task.getFailure()));
+                lastFailure = task.getFailure();
+                if (lastFailure != null) {
+                    message(Component.translatable(lastFailure));
                 }
             }
             tasks.remove(i--);
