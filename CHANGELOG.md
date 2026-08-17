@@ -31,6 +31,20 @@ be got out of the way.
   wrong instant, because the two halves of the drawing code each decided for themselves whether a
   shift was in effect.
 
+### Verification
+Automated: 98 unit tests under a fatal-warning build, and twelve in-game checks that run in a real
+world — mining real bedrock, then confirming the panel switch, the shapes, the commands and the
+packet count. All twelve also pass against a dedicated server over the network. Two clean builds
+produce byte-identical jars.
+
+The check on the settings texts is worth naming, because it is the one that would have let this
+release ship half-translated: it reads the list of settings out of the mod's own configuration
+rather than a list kept by hand, so a setting added without a description fails the build instead
+of reaching you as an English sentence under a translated label. It was tested by breaking it three
+different ways on purpose and confirming it noticed each one.
+
+Manual: run by hand on Windows before release.
+
 ## [1.1.0] — 2026-08-17
 
 The theme of this release is that the mod stopped being a black box. It tells you what it is
