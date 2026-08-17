@@ -6,10 +6,12 @@ import net.minecraft.world.level.block.state.BlockState;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayDeque;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -27,13 +29,22 @@ import java.util.function.Function;
 public final class GhostBlockRegistry {
     private GhostBlockRegistry() {}
 
-    /** What the mod put down, and what it covered up. */
-    public record Entry(BlockState ghost, BlockState original) {}
+    /**
+     * What the mod put down, what it covered up, and which placement it belonged to.
+     *
+     * <p>{@code batch} groups cells laid down by one action. A shape puts down dozens at once, and
+     * undoing them one keypress at a time would be a chore rather than an undo; grouping makes one
+     * press take back one thing the player did.</p>
+     */
+    public record Entry(BlockState ghost, BlockState original, int batch) {}
 
     /** Insertion-ordered so the newest entries are the ones undo reaches first. */
     private static final Map<BlockPos, Entry> entries = new LinkedHashMap<>();
     private static final Deque<BlockPos> placementOrder = new ArrayDeque<>();
     private static final Set<BlockPos> positionsView = Collections.unmodifiableSet(entries.keySet());
+
+    /** Never reused within a session, so a stale id cannot collide with a live group. */
+    private static int nextBatch = 1;
 
     /** Positions currently faked. Read-only; safe to consult from the render and physics paths. */
     public static Set<BlockPos> positions() {
@@ -73,12 +84,26 @@ public final class GhostBlockRegistry {
         return entries.size();
     }
 
+    /** A fresh group id, for a set of cells that should be taken back together. */
+    public static int newBatch() {
+        return nextBatch++;
+    }
+
     /**
-     * Records a ghost block.
+     * Records a ghost block as its own group.
      *
      * @return {@code false} when {@code limit} is already reached and nothing was recorded.
      */
     public static boolean add(BlockPos pos, BlockState ghost, BlockState original, int limit) {
+        return add(pos, ghost, original, limit, newBatch());
+    }
+
+    /**
+     * Records a ghost block as part of {@code batch}.
+     *
+     * @return {@code false} when {@code limit} is already reached and nothing was recorded.
+     */
+    public static boolean add(BlockPos pos, BlockState ghost, BlockState original, int limit, int batch) {
         BlockPos key = pos.immutable();
         if (entries.containsKey(key)) {
             return true;
@@ -86,7 +111,7 @@ public final class GhostBlockRegistry {
         if (entries.size() >= limit) {
             return false;
         }
-        entries.put(key, new Entry(ghost, original));
+        entries.put(key, new Entry(ghost, original, batch));
         placementOrder.addLast(key);
         return true;
     }
@@ -113,6 +138,29 @@ public final class GhostBlockRegistry {
             placementOrder.removeLast();
         }
         return null;
+    }
+
+    /**
+     * The newest group still standing, newest cell first, or empty when nothing is left.
+     *
+     * <p>Only cells that are still recorded are returned: whatever the server has since corrected
+     * away is not the player's to take back.</p>
+     */
+    public static List<BlockPos> lastBatch() {
+        BlockPos newest = lastPlaced();
+        if (newest == null) {
+            return List.of();
+        }
+        int batch = entries.get(newest).batch();
+        List<BlockPos> group = new ArrayList<>();
+        for (Map.Entry<BlockPos, Entry> entry : entries.entrySet()) {
+            if (entry.getValue().batch() == batch) {
+                group.add(entry.getKey());
+            }
+        }
+        // Newest first, so removal runs backwards through how it was laid down.
+        Collections.reverse(group);
+        return group;
     }
 
     public static void clear() {

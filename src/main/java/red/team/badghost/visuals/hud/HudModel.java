@@ -26,11 +26,22 @@ public final class HudModel {
             int broken,
             int failed,
             int attemptsPerBreakTenths,
-            long averageTicksPerBlock) {}
+            long averageTicksPerBlock,
+            /** Id of a setting that is on but whose hook never applied, or null when all is well. */
+            @Nullable String deadFeature) {}
 
     public static List<HudLine> build(State state) {
-        List<HudLine> lines = new ArrayList<>(6);
+        List<HudLine> lines = new ArrayList<>(7);
         lines.add(new HudLine(Component.translatable("badghost.hud.title"), HudLine.Kind.TITLE));
+
+        // Straight under the title, because a setting that cannot work outranks anything else the
+        // panel has to say: everything below it may be describing a feature that is not running.
+        if (state.deadFeature() != null) {
+            lines.add(new HudLine(
+                    Component.translatable("badghost.hud.feature_dead",
+                            Component.translatable("badghost.feature." + state.deadFeature())),
+                    HudLine.Kind.PROBLEM));
+        }
 
         boolean full = state.queueSize() >= state.queueLimit();
         lines.add(new HudLine(

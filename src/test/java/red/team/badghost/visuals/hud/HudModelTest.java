@@ -18,7 +18,7 @@ class HudModelTest {
     private static final Component CHECKLIST = Component.literal("checklist");
 
     private static HudModel.State idle() {
-        return new HudModel.State(0, 1, null, CHECKLIST, null, 0, 0, 0, 0L);
+        return new HudModel.State(0, 1, null, CHECKLIST, null, 0, 0, 0, 0L, null);
     }
 
     private static boolean hasKind(List<HudLine> lines, HudLine.Kind kind) {
@@ -41,7 +41,7 @@ class HudModelTest {
     @DisplayName("while a task runs the checklist gives way to its state")
     void activePanelDropsChecklist() {
         List<HudLine> lines = HudModel.build(
-                new HudModel.State(1, 1, "SWAP", CHECKLIST, null, 0, 0, 0, 0L));
+                new HudModel.State(1, 1, "SWAP", CHECKLIST, null, 0, 0, 0, 0L, null));
 
         assertTrue(hasKind(lines, HudLine.Kind.ACTIVE));
         assertFalse(lines.stream().anyMatch(l -> l.text() == CHECKLIST),
@@ -51,9 +51,9 @@ class HudModelTest {
     @Test
     @DisplayName("a full queue is flagged as a problem, a partial one is not")
     void fullQueueIsFlagged() {
-        assertTrue(hasKind(HudModel.build(new HudModel.State(1, 1, "SWAP", CHECKLIST, null, 0, 0, 0, 0L)),
+        assertTrue(hasKind(HudModel.build(new HudModel.State(1, 1, "SWAP", CHECKLIST, null, 0, 0, 0, 0L, null)),
                 HudLine.Kind.PROBLEM));
-        assertFalse(hasKind(HudModel.build(new HudModel.State(1, 4, "SWAP", CHECKLIST, null, 0, 0, 0, 0L)),
+        assertFalse(hasKind(HudModel.build(new HudModel.State(1, 4, "SWAP", CHECKLIST, null, 0, 0, 0, 0L, null)),
                 HudLine.Kind.PROBLEM));
     }
 
@@ -62,7 +62,7 @@ class HudModelTest {
     void blockerIsShown() {
         Component blocker = Component.literal("out of reach");
         List<HudLine> lines = HudModel.build(
-                new HudModel.State(0, 1, null, CHECKLIST, blocker, 0, 0, 0, 0L));
+                new HudModel.State(0, 1, null, CHECKLIST, blocker, 0, 0, 0, 0L, null));
 
         assertTrue(lines.stream().anyMatch(l -> l.text() == blocker && l.kind() == HudLine.Kind.PROBLEM));
     }
@@ -71,9 +71,28 @@ class HudModelTest {
     @DisplayName("statistics stay hidden until there is something to report")
     void statsAppearOnlyWhenEarned() {
         int before = HudModel.build(idle()).size();
-        int after = HudModel.build(new HudModel.State(0, 1, null, CHECKLIST, null, 3, 1, 15, 60L)).size();
+        int after = HudModel.build(new HudModel.State(0, 1, null, CHECKLIST, null, 3, 1, 15, 60L, null)).size();
 
         assertEquals(before + 1, after, "one extra line once blocks have been broken");
+    }
+
+    @Test
+    @DisplayName("a setting that cannot work is called out, right under the title")
+    void deadFeatureIsFlagged() {
+        List<HudLine> lines = HudModel.build(
+                new HudModel.State(0, 1, null, CHECKLIST, null, 0, 0, 0, 0L, "bounce"));
+
+        assertSame(HudLine.Kind.PROBLEM, lines.get(1).kind(),
+                "it outranks everything below it, which may be describing a feature that is off");
+        assertEquals(HudModel.build(idle()).size() + 1, lines.size());
+    }
+
+    @Test
+    @DisplayName("a healthy panel says nothing about liveness")
+    void healthyPanelIsQuiet() {
+        // A warning shown every session is a warning nobody reads by the third one.
+        assertFalse(HudModel.build(idle()).stream()
+                .anyMatch(l -> l.kind() == HudLine.Kind.PROBLEM));
     }
 
     @Test

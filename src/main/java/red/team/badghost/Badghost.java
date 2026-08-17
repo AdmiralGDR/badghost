@@ -13,7 +13,9 @@ import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.common.NeoForge;
 import red.team.badghost.automation.AutomationEngine;
+import red.team.badghost.command.BadghostCommands;
 import red.team.badghost.config.BadghostConfig;
+import red.team.badghost.core.FeatureAudit;
 import red.team.badghost.visuals.CameraService;
 import red.team.badghost.visuals.EspRenderer;
 import red.team.badghost.visuals.KeyBindings;
@@ -33,6 +35,11 @@ public final class Badghost {
         modEventBus.addListener(KeyBindings::onRegisterKeyMappings);
         modEventBus.addListener(Badghost::registerGuiLayers);
 
+        // Client commands: answered locally and never forwarded, see BadghostCommands.
+        NeoForge.EVENT_BUS.addListener(BadghostCommands::onRegisterClientCommands);
+        // Warns on world join when a setting is switched on but its hook did not apply, so a
+        // silently dead feature cannot be mistaken for a working one.
+        NeoForge.EVENT_BUS.register(FeatureAudit.class);
         NeoForge.EVENT_BUS.register(VisualService.class);
         NeoForge.EVENT_BUS.register(AutomationEngine.class);
         NeoForge.EVENT_BUS.register(EspRenderer.class);

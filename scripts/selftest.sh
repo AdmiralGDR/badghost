@@ -10,6 +10,8 @@
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
+# shellcheck source=scripts/verdict.sh
+. "$(dirname "$0")/verdict.sh"
 
 RUN_SECONDS="${1:-240}"
 WORLD="${2:-New World}"
@@ -43,21 +45,13 @@ echo "-----------------------"
 
 # Report the harness's own verdict line rather than a summary of our own, so a run that
 # verified less than it should cannot be described here as if it verified everything.
-verdict_line=$(grep -aoE "RESULT=(PASS|FAIL).*" "${LOG}" | tail -1)
-verdict=$(printf '%s' "${verdict_line}" | grep -oE "RESULT=(PASS|FAIL)")
-case "${verdict}" in
-    RESULT=PASS)
-        echo "SELF-TEST PASSED: ${verdict_line#RESULT=PASS }"
-        exit 0
-        ;;
-    RESULT=FAIL)
-        echo "SELF-TEST FAILED: ${verdict_line#RESULT=FAIL }" >&2
-        echo "see ${LOG}" >&2
-        exit 1
-        ;;
-    *)
-        # No verdict at all means the harness never ran; that is a failure, not a pass.
+verdict_line=$(read_verdict "${LOG}")
+case "$?" in
+    0)  echo "SELF-TEST PASSED: ${verdict_line#RESULT=PASS }"
+        exit 0 ;;
+    1)  echo "SELF-TEST FAILED: ${verdict_line#RESULT=FAIL }" >&2
+        echo "see ${LOG}" >&2; exit 1 ;;
+    *)  # No verdict at all means the harness never ran; that is a failure, not a pass.
         echo "SELF-TEST INCONCLUSIVE: no verdict was logged, see ${LOG}" >&2
-        exit 1
-        ;;
+        exit 1 ;;
 esac

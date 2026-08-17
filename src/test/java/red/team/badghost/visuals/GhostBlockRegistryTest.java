@@ -147,4 +147,45 @@ class GhostBlockRegistryTest {
             // exactly right
         }
     }
+
+    @Test
+    @DisplayName("one shape comes back with one undo, and takes nothing else with it")
+    void batchUndoTakesBackTheWholeGroup() {
+        int wall = GhostBlockRegistry.newBatch();
+        for (int i = 0; i < 3; i++) {
+            assertTrue(GhostBlockRegistry.add(new BlockPos(i, 0, 0), GHOST, AIR, 10, wall));
+        }
+        // Placed afterwards on its own, so it must be the group undo reaches first.
+        BlockPos loner = new BlockPos(0, 5, 0);
+        assertTrue(GhostBlockRegistry.add(loner, GHOST, GRASS, 10));
+
+        assertEquals(java.util.List.of(loner), GhostBlockRegistry.lastBatch(),
+                "the newest group is the single block, not the wall under it");
+        GhostBlockRegistry.remove(loner);
+
+        java.util.List<BlockPos> group = GhostBlockRegistry.lastBatch();
+        assertEquals(3, group.size(), "the whole wall comes back at once");
+        assertEquals(new BlockPos(2, 0, 0), group.get(0), "newest cell first, so removal runs backwards");
+    }
+
+    @Test
+    @DisplayName("each single placement is its own group, so undo still works block by block")
+    void singlePlacementsAreSeparateGroups() {
+        // Painting with the key held must keep behaving the way it always has.
+        GhostBlockRegistry.add(new BlockPos(0, 0, 0), GHOST, AIR, 10);
+        GhostBlockRegistry.add(new BlockPos(1, 0, 0), GHOST, AIR, 10);
+
+        assertEquals(1, GhostBlockRegistry.lastBatch().size());
+    }
+
+    @Test
+    @DisplayName("a group whose cells have vanished is not offered for undo")
+    void vanishedGroupIsEmpty() {
+        int batch = GhostBlockRegistry.newBatch();
+        GhostBlockRegistry.add(BlockPos.ZERO, GHOST, AIR, 10, batch);
+        GhostBlockRegistry.remove(BlockPos.ZERO);
+
+        assertTrue(GhostBlockRegistry.lastBatch().isEmpty(),
+                "nothing is left, and undo must say so rather than hand back a stale cell");
+    }
 }

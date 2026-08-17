@@ -10,22 +10,31 @@ import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.neoforged.bus.api.SubscribeEvent;
+import net.neoforged.neoforge.client.ClientCommandHandler;
 import net.neoforged.neoforge.client.event.ClientTickEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import red.team.badghost.Badghost;
 import red.team.badghost.automation.AutomationEngine;
 import red.team.badghost.automation.MinerRequirements;
 import red.team.badghost.automation.MinerTask;
 import red.team.badghost.automation.plan.PlanMode;
 import red.team.badghost.config.BadghostConfig;
+import red.team.badghost.config.Profile;
 import red.team.badghost.core.ClientContext;
+import red.team.badghost.core.FeatureAudit;
 import red.team.badghost.core.ModState;
+import red.team.badghost.core.PacketLog;
 import red.team.badghost.utils.InventoryHelper;
 import red.team.badghost.visuals.GhostBlockRegistry;
 import red.team.badghost.visuals.GhostPhysics;
 import red.team.badghost.visuals.NegativeEffectFilter;
+import red.team.badghost.visuals.VisualService;
+import red.team.badghost.visuals.template.GhostTemplate;
 
 import java.util.List;
+import java.util.Map;
+import java.util.SortedMap;
 import java.util.function.Consumer;
 
 /**
@@ -121,6 +130,8 @@ public final class SelfTest {
         ticks++;
         switch (phase) {
             case WAIT_WORLD -> after(SETTLE_TICKS, () -> {
+                // Opened here, after the join is over, so NeoForge's handshake is not in the window.
+                PacketLog.start();
                 equip(connection);
                 phase = Phase.EQUIP;
             });
@@ -493,8 +504,181 @@ public final class SelfTest {
         }
         LOGGER.info("{}: slime PASS — landing on a ghost block bounced", TAG);
         passed.add("ghost-slime");
+        checkGhostTemplate();
+    }
+
+    /**
+     * A shape goes down as one action and comes back as one.
+     *
+     * <p>Goes through {@link VisualService#placeShape} — the same routine the key calls — so this
+     * checks the feature rather than a restatement of it. The point of interest is the undo: before
+     * grouping, taking back a wall meant one press per block.</p>
+     */
+    private static void checkGhostTemplate() {
+        LOGGER.info("{}: --- checking ghost-block shapes ---", TAG);
+        VisualService.clearAll();
+        BadghostConfig.TEMPLATE_SHAPE.set(GhostTemplate.WALL);
+        BadghostConfig.TEMPLATE_SIZE.set(3);
+
+        VisualService.placeShape(GhostTemplate.WALL);
+        int placed = GhostBlockRegistry.size();
+        LOGGER.info("{}: wall of 3 placed {} ghost block(s)", TAG, placed);
+        if (placed == 0) {
+            fail("a 3-wide wall placed nothing at all");
+            return;
+        }
+
+        VisualService.undoLast();
+        int left = GhostBlockRegistry.size();
+        if (left != 0) {
+            fail("one undo left " + left + " of " + placed
+                    + " block(s) behind; the group was not taken back as one");
+            return;
+        }
+        LOGGER.info("{}: shapes PASS — {} blocks placed as one group and undone by one press",
+                TAG, placed);
+        passed.add("ghost-template");
+
+        BadghostConfig.TEMPLATE_SHAPE.set(GhostTemplate.SINGLE);
+        checkCommandsStayLocal();
+    }
+
+    /**
+     * Every {@code /badghost} line must be answered here, never handed to the server.
+     *
+     * <p>Asked through {@link ClientCommandHandler#runCommand}, which is the very method that
+     * decides: it returns false when Brigadier could not finish the parse, and NeoForge then sends
+     * the line on. A unit test pins the parse tree, but only this asks the real code path — and the
+     * mistyped subcommand is the case that matters, because a typo must not put the mod's name into
+     * someone else's server log.</p>
+     */
+    private static void checkCommandsStayLocal() {
+        LOGGER.info("{}: --- checking client commands stay local ---", TAG);
+        List<String> inputs = List.of(
+                "badghost", "badghost help", "badghost stats", "badghost queue", "badghost why",
+                "badghost audit", "badghost profile", "badghost profile safe",
+                "badghost profile bogus", "badghost stst", "badghost stats extra words");
+
+        // Counted rather than argued: whatever the parse tree does, the test of "nothing was sent"
+        // is that nothing was sent. Nothing else runs between these two reads, so any difference
+        // belongs to the commands.
+        int before = PacketLog.total();
+        for (String input : inputs) {
+            if (!ClientCommandHandler.runCommand(input)) {
+                fail("'/" + input + "' was handed to the server instead of being answered locally");
+                return;
+            }
+        }
+        int sent = PacketLog.total() - before;
+        if (sent != 0) {
+            fail(sent + " packet(s) went out while running " + inputs.size()
+                    + " local commands; tally: " + PacketLog.snapshot());
+            return;
+        }
+        LOGGER.info("{}: commands PASS — {} inputs answered locally, {} packets sent",
+                TAG, inputs.size(), sent);
+        passed.add("commands-stay-local");
+
+        // The debugging profile the check just applied would otherwise leak into the audit below.
+        Profile.SAFE.apply();
+        checkPacketLedger();
+    }
+
+    /**
+     * What the client actually sent while the mod did its work.
+     *
+     * <p>The mod's founding claim is that the server learns nothing about it. This is where that
+     * stops being a reading of the code: every outgoing packet since the world settled has been
+     * counted, and two things must hold — no packet class from outside vanilla's protocol packages,
+     * and no custom-payload channel belonging to this mod. Those are the two ways a mod speaks to a
+     * server, and there must be none of either.</p>
+     *
+     * <p>Stated no more strongly than it is: the window opens after joining, so NeoForge's own login
+     * handshake is outside it, and nothing here is evidence about the timing or contents of ordinary
+     * vanilla packets. The tally is printed in full so it can be read rather than trusted.</p>
+     */
+    private static void checkPacketLedger() {
+        LOGGER.info("{}: --- checking the outgoing-packet tally ---", TAG);
+        SortedMap<String, Integer> tally = PacketLog.snapshot();
+        if (tally.isEmpty()) {
+            // An empty tally would pass every assertion below while proving nothing at all.
+            fail("no outgoing packets were recorded, so the tally proves nothing — is the hook applied?");
+            return;
+        }
+        for (Map.Entry<String, Integer> entry : tally.entrySet()) {
+            LOGGER.info("{}:   {} x{}", TAG, entry.getKey(), entry.getValue());
+        }
+
+        List<String> foreign = new java.util.ArrayList<>();
+        List<String> ours = new java.util.ArrayList<>();
+        for (String label : tally.keySet()) {
+            if (label.startsWith(PacketLog.FOREIGN_PREFIX)) {
+                foreign.add(label);
+            }
+            if (label.startsWith(PacketLog.PAYLOAD_PREFIX + Badghost.MODID)) {
+                ours.add(label);
+            }
+        }
+        if (!foreign.isEmpty()) {
+            fail("packet types from outside vanilla went out: " + foreign);
+            return;
+        }
+        if (!ours.isEmpty()) {
+            fail("this mod opened its own channel to the server: " + ours);
+            return;
+        }
+
+        LOGGER.info("{}: packet tally PASS — {} packets over {} vanilla type(s), "
+                        + "no mod-defined packet and no channel of ours "
+                        + "(window opens after join, so it excludes the login handshake)",
+                TAG, PacketLog.total(), tally.size());
+        passed.add("packet-ledger");
+        checkFeatureAudit();
+    }
+
+    /**
+     * The liveness audit must agree with what this run just observed.
+     *
+     * <p>Deliberately last. By now friction and bounce have fired for real, so their counters are
+     * independent evidence: a capability reported dead after it demonstrably ran would mean the
+     * probe is broken, not the feature. That contradiction is checked explicitly, because an
+     * audit that lies is worse than no audit — it would report all-clear over a dead setting.</p>
+     */
+    private static void checkFeatureAudit() {
+        LOGGER.info("{}: --- checking feature audit ---", TAG);
+        // Everything on, so every row is judged instead of being skipped as switched off.
+        BadghostConfig.FROZEN_SLIPPERY.set(true);
+        BadghostConfig.BOUNCY.set(true);
+        BadghostConfig.DISABLE_NEGATIVES.set(true);
+        BadghostConfig.PLAN_MODE.set(PlanMode.ALL_DIRECTION);
+
+        List<FeatureAudit.Row> rows = FeatureAudit.report();
+        for (FeatureAudit.Row row : rows) {
+            LOGGER.info("{}: feature {} = {} (fired {})", TAG, row.id(), row.health(),
+                    row.fired() == FeatureAudit.NOT_COUNTED ? "n/a" : row.fired());
+            if (row.health() == FeatureAudit.Health.DEAD) {
+                LOGGER.info("{}:   '{}' probed DEAD; handlers actually on the target: {}",
+                        TAG, row.id(), FeatureAudit.foundHandlers(row.id()));
+            }
+        }
+
+        for (FeatureAudit.Row row : rows) {
+            if (row.health() == FeatureAudit.Health.DEAD) {
+                fail("the audit reports '" + row.id() + "' dead: its mixin did not apply"
+                        + (row.fired() > 0 ? ", yet it fired " + row.fired()
+                                + " time(s) — the probe is wrong, not the feature" : ""));
+                return;
+            }
+        }
+        LOGGER.info("{}: feature audit PASS — all {} capabilities wired and agreeing with their counters",
+                TAG, rows.size());
+        passed.add("feature-audit");
+
         BadghostConfig.FROZEN_SLIPPERY.set(false);
         BadghostConfig.BOUNCY.set(false);
+        BadghostConfig.DISABLE_NEGATIVES.set(false);
+        BadghostConfig.PLAN_MODE.set(PlanMode.VERTICAL_FAST);
+        PacketLog.stop();
         finishAll();
     }
 
@@ -504,17 +688,29 @@ public final class SelfTest {
         return SCENARIOS.get(scenarioIndex);
     }
 
+    /**
+     * Records a failure and names where it happened.
+     *
+     * <p>The checks that run after the last scenario have no current scenario, and reaching for
+     * one threw — so a failure there produced no verdict at all instead of a FAIL. The script
+     * called that inconclusive rather than a pass, which is why it surfaced; a harness that
+     * cannot report its own failure is worse than one that fails.</p>
+     */
     private static void fail(String detail) {
         allPassed = false;
         ModState.setAutomationEnabled(false);
         phase = Phase.DONE;
-        LOGGER.info("{}: RESULT=FAIL scenario '{}': {}", TAG, current().name(), detail);
+        String where = scenarioIndex < SCENARIOS.size()
+                ? "scenario '" + current().name() + "'"
+                : "post-scenario checks";
+        LOGGER.info("{}: RESULT=FAIL {}: {}", TAG, where, detail);
     }
 
     /** Everything this harness claims to verify. A run that skips any of it is not a pass. */
     private static final List<String> EXPECTED_CHECKS = List.of(
             "vertical-floor", "all-direction-sideways", "nether-roof-ceiling",
-            "abort-leaves-nothing", "negative-effects", "ghost-ice", "ghost-slime");
+            "abort-leaves-nothing", "negative-effects", "ghost-ice", "ghost-slime",
+            "ghost-template", "commands-stay-local", "packet-ledger", "feature-audit");
 
     private static void finishAll() {
         phase = Phase.DONE;

@@ -10,6 +10,8 @@
 set -uo pipefail
 
 cd "$(dirname "$0")/.."
+# shellcheck source=scripts/verdict.sh
+. "$(dirname "$0")/verdict.sh"
 
 CLIENT_SECONDS="${1:-260}"
 SERVER_LOG="build/selftest-server-dedicated.log"
@@ -88,7 +90,7 @@ client_pid=$!
 
 echo "### waiting for the client's verdict ###"
 for _ in $(seq "${CLIENT_SECONDS}"); do
-    if grep -aqE 'RESULT=(PASS|FAIL) all|RESULT=FAIL scenario' "${CLIENT_LOG}" 2>/dev/null; then break; fi
+    if verdict_present "${CLIENT_LOG}"; then break; fi
     if ! kill -0 "${client_pid}" 2>/dev/null; then break; fi
     sleep 1
 done
@@ -98,18 +100,13 @@ echo "--- self-test trace (over the network) ---"
 grep -aF 'BADGHOST-SELFTEST' "${CLIENT_LOG}" 2>/dev/null | sed 's/^.*BADGHOST-SELFTEST[]:]*//' || true
 echo "-------------------------------------------"
 
-verdict=$(grep -aoE 'RESULT=(PASS|FAIL) all [0-9]+ scenarios' "${CLIENT_LOG}" 2>/dev/null | tail -1)
-case "${verdict}" in
-    RESULT=PASS*)
-        echo "SERVER SELF-TEST PASSED (${verdict#RESULT=PASS }) over a real network path"
+verdict=$(read_verdict "${CLIENT_LOG}")
+case "$?" in
+    0)  echo "SERVER SELF-TEST PASSED over a real network path: ${verdict#RESULT=PASS }"
         exit 0 ;;
-    RESULT=FAIL*)
-        echo "SERVER SELF-TEST FAILED, see ${CLIENT_LOG}" >&2; exit 1 ;;
-    *)
-        if grep -aqF 'RESULT=FAIL scenario' "${CLIENT_LOG}"; then
-            echo "SERVER SELF-TEST FAILED (scenario), see ${CLIENT_LOG}" >&2
-        else
-            echo "SERVER SELF-TEST INCONCLUSIVE: no verdict, see ${CLIENT_LOG}" >&2
-        fi
+    1)  echo "SERVER SELF-TEST FAILED: ${verdict#RESULT=FAIL }" >&2
+        echo "see ${CLIENT_LOG}" >&2; exit 1 ;;
+    *)  # No verdict means the harness never finished; that is a failure, not a pass.
+        echo "SERVER SELF-TEST INCONCLUSIVE: no verdict was logged, see ${CLIENT_LOG}" >&2
         exit 1 ;;
 esac

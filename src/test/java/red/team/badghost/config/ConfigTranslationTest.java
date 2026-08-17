@@ -29,9 +29,10 @@ class ConfigTranslationTest {
 
     /** Sections and options declared by the spec, exactly as the screen will ask for them. */
     private static final List<String> KEYS = List.of(
-            "Visuals", "Automation", "Preview", "AutoScan", "ESP",
+            "Visuals", "Template", "Automation", "Preview", "AutoScan", "ESP",
             "ghostBlock", "frozenSlippery", "bouncy", "disableNegatives", "modelOffset",
             "cameraDistance", "ghostLimit",
+            "templateShape", "templateSize",
             "automationEnabled", "planMode", "supportBlock", "limitMax", "maxRetries",
             "waitTicks", "rotateSettleTicks", "skipInstaMineCheck",
             "previewEnabled",

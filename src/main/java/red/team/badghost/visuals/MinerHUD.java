@@ -11,6 +11,7 @@ import red.team.badghost.automation.MinerRequirements;
 import red.team.badghost.automation.MinerTask;
 import red.team.badghost.automation.preview.PreviewService;
 import red.team.badghost.config.BadghostConfig;
+import red.team.badghost.core.FeatureAudit;
 import red.team.badghost.core.ModState;
 import red.team.badghost.core.SessionStats;
 import red.team.badghost.visuals.hud.HudLine;
@@ -61,7 +62,8 @@ public final class MinerHUD implements LayeredDraw.Layer {
                 SessionStats.broken(),
                 SessionStats.failed(),
                 SessionStats.attemptsPerBreakTenths(),
-                SessionStats.averageTicksPerBlock()));
+                SessionStats.averageTicksPerBlock(),
+                FeatureAudit.firstDead()));
 
         int y = MARGIN;
         for (int i = 0; i < lines.size(); i++) {

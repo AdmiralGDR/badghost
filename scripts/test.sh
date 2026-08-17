@@ -14,7 +14,10 @@ echo "### translation coverage ###"
 # compiler or the tests would notice. Derived keys (PlanResult reasons) are covered by unit
 # tests; this catches the literals.
 missing=0
-keys=$(grep -rhoE '"badghost\.(message|reason|hud|req|configuration)\.[a-zA-Z_]+"' src/main/java --include=*.java \
+# The tail may itself contain dots (badghost.command.help.title) but must not end in one:
+# ending in a dot means the literal is a prefix a call site concatenates onto, and the key it
+# builds cannot be known from here. Those are covered by unit tests instead.
+keys=$(grep -rhoE '"badghost\.(message|reason|hud|req|configuration|command|feature|profile)\.[a-zA-Z_.]*[a-zA-Z_]"' src/main/java --include=*.java \
         | tr -d '"' | sort -u)
 for key in ${keys}; do
     for lang in en_us ru_ru; do

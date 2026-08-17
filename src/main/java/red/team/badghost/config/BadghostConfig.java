@@ -3,6 +3,7 @@ package red.team.badghost.config;
 
 import net.neoforged.neoforge.common.ModConfigSpec;
 import red.team.badghost.automation.plan.PlanMode;
+import red.team.badghost.visuals.template.GhostTemplate;
 
 /** Client config spec. Never registered on a dedicated server. */
 public final class BadghostConfig {
@@ -18,6 +19,10 @@ public final class BadghostConfig {
     public static final ModConfigSpec.DoubleValue MODEL_OFFSET;
     public static final ModConfigSpec.DoubleValue CAMERA_DISTANCE;
     public static final ModConfigSpec.IntValue GHOST_LIMIT;
+
+    // Ghost-block shapes
+    public static final ModConfigSpec.EnumValue<GhostTemplate> TEMPLATE_SHAPE;
+    public static final ModConfigSpec.IntValue TEMPLATE_SIZE;
 
     // Bedrock miner
     public static final ModConfigSpec.BooleanValue AUTOMATION_ENABLED;
@@ -71,6 +76,17 @@ public final class BadghostConfig {
                 .comment("How many ghost blocks may exist at once, so holding the key cannot",
                         "fill the client's world without bound.")
                 .defineInRange("ghostLimit", 256, 1, 4096);
+        builder.pop();
+
+        builder.push("Template");
+        TEMPLATE_SHAPE = builder
+                .comment("What the ghost-block key lays out. SINGLE paints one cell at a time while",
+                        "the key is held, as it always has; every other shape places its whole set on",
+                        "each press and takes the whole set back with one undo.")
+                .defineEnum("templateShape", GhostTemplate.SINGLE);
+        TEMPLATE_SIZE = builder
+                .comment("How large a shape is, in blocks. Ignored by SINGLE.")
+                .defineInRange("templateSize", 3, 1, GhostTemplate.MAX_SIZE);
         builder.pop();
 
         builder.push("Automation");
