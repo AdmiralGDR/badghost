@@ -72,8 +72,10 @@ dedicated server over the network, since the mod must work without the server kn
 The mod being invisible to the server is now measured rather than asserted. The self-test counts
 every packet the client sends while it mines, and checks two things: that no packet type comes from
 anywhere but the game itself, and that this mod never opens a channel of its own. A run mining four
-bedrock blocks sends 232 packets across 7 ordinary vanilla types and nothing else, and the eleven
-`/badghost` commands together send exactly none.
+bedrock blocks sends 213 packets across 7 ordinary vanilla types in single player, and 246 across 8
+against a real server over a socket — the extra type being the keep-alive a network connection has
+and a local one does not. Nothing else, in either case. The eleven `/badghost` commands together
+send exactly none.
 
 To be exact about what that does and does not show: the count begins after you have joined, so it
 says nothing about the mod list exchanged while connecting, and it is not a claim about the timing
