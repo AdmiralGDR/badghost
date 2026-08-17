@@ -28,6 +28,7 @@ import red.team.badghost.core.PacketLog;
 import red.team.badghost.utils.InventoryHelper;
 import red.team.badghost.visuals.GhostBlockRegistry;
 import red.team.badghost.visuals.GhostPhysics;
+import red.team.badghost.visuals.MinerHUD;
 import red.team.badghost.visuals.NegativeEffectFilter;
 import red.team.badghost.visuals.VisualService;
 import red.team.badghost.visuals.template.GhostTemplate;
@@ -504,7 +505,7 @@ public final class SelfTest {
         }
         LOGGER.info("{}: slime PASS — landing on a ghost block bounced", TAG);
         passed.add("ghost-slime");
-        checkGhostTemplate();
+        checkHudToggle();
     }
 
     /**
@@ -514,6 +515,34 @@ public final class SelfTest {
      * checks the feature rather than a restatement of it. The point of interest is the undo: before
      * grouping, taking back a wall meant one press per block.</p>
      */
+    private static void checkHudToggle() {
+        LOGGER.info("{}: --- checking the status panel switch ---", TAG);
+        boolean armedBefore = ModState.isAutomationEnabled();
+        boolean shownBefore = BadghostConfig.HUD_ENABLED.get();
+        ModState.setAutomationEnabled(true);
+
+        BadghostConfig.HUD_ENABLED.set(true);
+        boolean onWhenOn = MinerHUD.isVisible();
+        BadghostConfig.HUD_ENABLED.set(false);
+        boolean onWhenOff = MinerHUD.isVisible();
+        LOGGER.info("{}: panel visible with the setting on={} off={}", TAG, onWhenOn, onWhenOff);
+
+        BadghostConfig.HUD_ENABLED.set(shownBefore);
+        ModState.setAutomationEnabled(armedBefore);
+
+        if (!onWhenOn) {
+            fail("the status panel stays hidden even when it is switched on");
+            return;
+        }
+        if (onWhenOff) {
+            fail("the status panel is still drawn after being switched off");
+            return;
+        }
+        LOGGER.info("{}: panel switch PASS — the setting decides whether it is drawn", TAG);
+        passed.add("hud-toggle");
+        checkGhostTemplate();
+    }
+
     private static void checkGhostTemplate() {
         LOGGER.info("{}: --- checking ghost-block shapes ---", TAG);
         VisualService.clearAll();
@@ -710,7 +739,8 @@ public final class SelfTest {
     private static final List<String> EXPECTED_CHECKS = List.of(
             "vertical-floor", "all-direction-sideways", "nether-roof-ceiling",
             "abort-leaves-nothing", "negative-effects", "ghost-ice", "ghost-slime",
-            "ghost-template", "commands-stay-local", "packet-ledger", "feature-audit");
+            "hud-toggle", "ghost-template", "commands-stay-local", "packet-ledger",
+            "feature-audit");
 
     private static void finishAll() {
         phase = Phase.DONE;

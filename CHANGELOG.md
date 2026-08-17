@@ -5,6 +5,32 @@ changed for you, and how the build was checked before it went out.
 
 Versions follow [Semantic Versioning](https://semver.org/). Dates are ISO-8601.
 
+## [1.2.0] — 2026-08-17
+
+Mostly words this time. Every setting now explains itself in your own language, and the panel can
+be got out of the way.
+
+### Added
+- **The status panel can be turned off** — in the settings, or with a key so you can do it without
+  leaving the game. The miner carries on working either way, and `/badghost stats` and
+  `/badghost why` still answer. The panel also disappears with the rest of the interface when you
+  press F1, which it should always have done.
+
+### Changed
+- **Every setting explains itself, in your language.** The settings screen used to show its
+  explanations in English whatever language you played in, because it fell back to the raw comment
+  in the config file. All thirty-two settings and sections now have a real translated description,
+  and the descriptions say what a setting does not do as well as what it does.
+- **Plainer wording throughout.** Labels and messages were written half in mod jargon: the settings
+  said "ghost blocks" where the messages said something else, key names shouted in title case, and
+  the Russian text left words like "Bedrock Miner" and "ESP" untranslated or transliterated. Both
+  languages now use the same plain words for the same things.
+
+### Fixed
+- Shifting player models could corrupt everything drawn afterwards if the setting changed at the
+  wrong instant, because the two halves of the drawing code each decided for themselves whether a
+  shift was in effect.
+
 ## [1.1.0] — 2026-08-17
 
 The theme of this release is that the mod stopped being a black box. It tells you what it is
@@ -72,10 +98,10 @@ dedicated server over the network, since the mod must work without the server kn
 The mod being invisible to the server is now measured rather than asserted. The self-test counts
 every packet the client sends while it mines, and checks two things: that no packet type comes from
 anywhere but the game itself, and that this mod never opens a channel of its own. A run mining four
-bedrock blocks sends 213 packets across 7 ordinary vanilla types in single player, and 246 across 8
-against a real server over a socket — the extra type being the keep-alive a network connection has
-and a local one does not. Nothing else, in either case. The eleven `/badghost` commands together
-send exactly none.
+bedrock blocks sends a couple of hundred packets across seven or eight ordinary vanilla types —
+how many depends on how long the run takes and whether it is over a network, so the count is not a
+fixed number — and nothing outside that. The eleven `/badghost` commands together send exactly
+none, which is a fixed number.
 
 To be exact about what that does and does not show: the count begins after you have joined, so it
 says nothing about the mod list exchanged while connecting, and it is not a claim about the timing

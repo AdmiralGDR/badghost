@@ -71,6 +71,9 @@ public final class VisualService {
         while (KeyBindings.CLEAR_GHOST_BLOCKS.consumeClick()) {
             clearAll();
         }
+        while (KeyBindings.TOGGLE_HUD.consumeClick()) {
+            toggleHud(player);
+        }
 
         // Drained every tick and collapsed to one action, so a burst of queued presses cannot
         // stack up several shapes in a single tick.
@@ -131,6 +134,20 @@ public final class VisualService {
             return;
         }
         placeTemplate(mc, player, level, ghostBlock, shape);
+    }
+
+    /**
+     * Hides or shows the status panel, and says which it did.
+     *
+     * <p>Turning a panel off is the one action whose result the panel itself cannot report, so this
+     * says so in the action bar. Otherwise hiding it looks the same as the key not working.</p>
+     */
+    private static void toggleHud(LocalPlayer player) {
+        boolean shown = !BadghostConfig.HUD_ENABLED.get();
+        BadghostConfig.HUD_ENABLED.set(shown);
+        BadghostConfig.SPEC.save();
+        player.displayClientMessage(Component.translatable(
+                shown ? "badghost.message.hud_shown" : "badghost.message.hud_hidden"), true);
     }
 
     /** Where a shape starts: the face being looked at, or underfoot when nothing is in range. */
@@ -334,10 +351,21 @@ public final class VisualService {
         event.setCanceled(true);
     }
 
+    /**
+     * Whether the matrix was pushed for the model currently being drawn.
+     *
+     * <p>Both halves used to re-read the setting, so a change landing between them would push
+     * without popping or pop without pushing, and an unbalanced matrix corrupts everything drawn
+     * afterwards. Remembering the decision keeps the pair honest. Player rendering happens one at a
+     * time on the render thread, so a single flag is enough.</p>
+     */
+    private static boolean modelPushed;
+
     @SubscribeEvent
     public static void onRenderPlayerPre(RenderPlayerEvent.Pre event) {
         double offset = BadghostConfig.MODEL_OFFSET.get();
-        if (offset != 0.0D) {
+        modelPushed = offset != 0.0D;
+        if (modelPushed) {
             event.getPoseStack().pushPose();
             event.getPoseStack().translate(0.0D, offset, 0.0D);
         }
@@ -345,9 +373,9 @@ public final class VisualService {
 
     @SubscribeEvent
     public static void onRenderPlayerPost(RenderPlayerEvent.Post event) {
-        double offset = BadghostConfig.MODEL_OFFSET.get();
-        if (offset != 0.0D) {
+        if (modelPushed) {
             event.getPoseStack().popPose();
+            modelPushed = false;
         }
     }
 }

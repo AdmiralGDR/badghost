@@ -35,10 +35,18 @@ public final class KeyBindings {
             GLFW.GLFW_KEY_J,
             CATEGORY);
 
+    /** Hides or shows the status panel without leaving the game for the settings screen. */
+    public static final KeyMapping TOGGLE_HUD = new KeyMapping(
+            "key.badghost.togglehud",
+            InputConstants.Type.KEYSYM,
+            GLFW.GLFW_KEY_K,
+            CATEGORY);
+
     public static void onRegisterKeyMappings(RegisterKeyMappingsEvent event) {
         event.register(PLACE_GHOST_BLOCK);
         event.register(UNDO_GHOST_BLOCK);
         event.register(CLEAR_GHOST_BLOCKS);
         event.register(TOGGLE_AUTOMATION);
+        event.register(TOGGLE_HUD);
     }
 }

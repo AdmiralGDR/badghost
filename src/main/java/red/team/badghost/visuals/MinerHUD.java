@@ -41,16 +41,29 @@ public final class MinerHUD implements LayeredDraw.Layer {
     private static Component cachedChecklist;
     private static long checklistBuiltAt = Long.MIN_VALUE;
 
+    /**
+     * Whether the panel would be drawn right now.
+     *
+     * <p>The single gate {@link #render} uses, exposed so the self-test can check the switch works
+     * rather than take its word for it. Asked before any state is gathered: someone who turned the
+     * panel off should not pay for a checklist they will never see.</p>
+     */
+    public static boolean isVisible() {
+        if (!BadghostConfig.HUD_ENABLED.get() || !ModState.isAutomationEnabled()) {
+            return false;
+        }
+        Minecraft mc = Minecraft.getInstance();
+        // F1 hides the game's own interface; a mod panel that ignored that would be the one thing
+        // left on a screenshot.
+        return mc.font != null && !mc.options.hideGui;
+    }
+
     @Override
     public void render(GuiGraphics guiGraphics, DeltaTracker deltaTracker) {
-        if (!ModState.isAutomationEnabled()) {
+        if (!isVisible()) {
             return;
         }
-
         Minecraft mc = Minecraft.getInstance();
-        if (mc.font == null || mc.options.hideGui) {
-            return;
-        }
 
         MinerTask current = AutomationEngine.getCurrentTask();
         List<HudLine> lines = HudModel.build(new HudModel.State(
