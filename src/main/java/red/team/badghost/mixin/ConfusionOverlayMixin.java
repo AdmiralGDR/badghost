@@ -3,11 +3,10 @@ package red.team.badghost.mixin;
 
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.util.Mth;
+import com.llamalad7.mixinextras.injector.ModifyExpressionValue;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import red.team.badghost.visuals.NegativeEffectFilter;
 
@@ -39,15 +38,20 @@ public class ConfusionOverlayMixin {
      * The projection-warp path, used at default settings. Reporting no spin leaves the rest of
      * the maths intact and simply skips the rotation, exactly as it is skipped when nausea is
      * not active at all.
+     *
+     * <p>{@code @ModifyExpressionValue} rather than {@code @Redirect}: it says what is actually
+     * meant — take the value vanilla computed and hand back another — and, unlike a redirect, it
+     * does not claim the call site exclusively, so a second mod hooking the same spin can still
+     * apply.</p>
      */
-    @Redirect(
+    @ModifyExpressionValue(
             method = "renderLevel",
             at = @At(value = "INVOKE", target = "Lnet/minecraft/util/Mth;lerp(FFF)F", ordinal = 0))
-    private float badghost$flattenSpin(float delta, float from, float to) {
+    private float badghost$flattenSpin(float spin) {
         if (NegativeEffectFilter.enabled() && NegativeEffectFilter.hasNausea()) {
             NegativeEffectFilter.countNausea();
             return 0.0F;
         }
-        return Mth.lerp(delta, from, to);
+        return spin;
     }
 }
