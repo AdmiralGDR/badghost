@@ -1,8 +1,12 @@
 # BadGhost
 
 **A client-side NeoForge mod for Minecraft 1.21.1** (Java 21). It loads only on the
-client (`@Mod(dist = Dist.CLIENT)`); on a dedicated server it does nothing. It is *not*
-a server optimization package, despite the current `mod_description` in `gradle.properties`.
+client (`@Mod(dist = Dist.CLIENT)`) and is not installed on the server. It is *not* a
+server optimization package.
+
+Nothing runs on the server, but the server still sees the effect: while the bedrock miner
+is running, `ServerboundMovePlayerPacketMixin` replaces the look angle in outgoing movement
+packets. The player's camera stays where it is; only the angle the server receives changes.
 
 ## What it does
 
@@ -15,8 +19,8 @@ a server optimization package, despite the current `mod_description` in `gradle.
 - **Status HUD** (`MinerHUD`), toggleable by key or config; hides with F1.
 - **Client tweaks via mixins** — slippery/bouncy block physics (`BlockFrictionMixin`,
   `EntityBounceMixin`), nausea swirl suppression (`ConfusionOverlayMixin`), negative-effect
-  filter, plus `ServerboundMovePlayerPacketMixin` and `ClientSendMixin` (counts every
-  outgoing packet so `/badghost stats` can show what the client sends).
+  filter, `ServerboundMovePlayerPacketMixin` (look angle sent during automation, see above)
+  and `ClientSendMixin` (counts outgoing packets for `/badghost stats`).
 - **Client commands** — `/badghost help | stats | why | undo | clear | profile | template`,
   answered locally, never forwarded to the server.
 - English and Russian translations; in-game config screen built from the config spec
@@ -56,15 +60,3 @@ src/main/java/red/team/badghost/
   utils/, visuals/ helpers, HUD, ESP, ghost-block registry, keybinds
 src/test/          JUnit tests
 ```
-
-## License
-
-Source headers and `mod_license` declare **GNU AGPL-3.0** (© RedTeam). See `LICENSE`.
-
-## Proposed GitHub description
-
-Current: "Server-side optimization package to improve tick handling." — inaccurate.
-
-Proposed: **"Client-side NeoForge 1.21.1 mod: ghost blocks, bedrock-miner automation, HUD and ESP. Installed on the client only, but it changes what the client sends to the server."**
-
-(`mod_description` in `gradle.properties` should be changed to match.)
