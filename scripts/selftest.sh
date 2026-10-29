@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (C) 2026 RedTeam. Licensed under GNU AGPLv3.
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 AdmiralGDR
 #
 # End-to-end proof that the bedrock miner works. Launches a real client into a real world,
 # builds a scenario, runs the glitch and reports the verdict the game itself logged.

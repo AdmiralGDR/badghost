@@ -110,6 +110,8 @@ dependencies {
 // The self-test harness drives a live client; it has no business in a shipped artifact.
 tasks.named('jar', Jar) {
     exclude 'red/team/badghost/dev/**'
+    // The license travels with the jar, which is what most players download.
+    metaInf { from 'LICENSE', 'NOTICE' }
 }
 
 tasks.named('test', Test) {

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (C) 2026 RedTeam. Licensed under GNU AGPLv3.
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 AdmiralGDR
 #
 # End-to-end proof over a REAL network path: a dedicated NeoForge server (which does not load
 # this client-only mod at all) plus a separate client that connects to it over a socket and runs

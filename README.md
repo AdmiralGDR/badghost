@@ -60,3 +60,16 @@ src/main/java/red/team/badghost/
   utils/, visuals/ helpers, HUD, ESP, ghost-block registry, keybinds
 src/test/          JUnit tests
 ```
+
+## License
+
+Copyright (C) 2026 AdmiralGDR.
+
+BadGhost is free software: you can redistribute it and/or modify it under the terms of
+the GNU General Public License as published by the Free Software Foundation, either
+version 3 of the License, or (at your option) any later version. See `LICENSE`.
+SPDX identifier: `GPL-3.0-or-later`. Build files taken from the NeoForged mod template
+keep their MIT notice, see `NOTICE`.
+
+Copies published before this change, up to and including 1.2.0, remain under the GNU
+Affero General Public License version 3 they were published with.

@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (C) 2026 RedTeam. Licensed under GNU AGPLv3.
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 AdmiralGDR
 #
 # Launches the development client, lets it reach the main menu, kills it and checks the log
 # for load failures. Verifies that the mod registers, the mixin applies and nothing throws

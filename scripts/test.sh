@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (C) 2026 RedTeam. Licensed under GNU AGPLv3.
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 AdmiralGDR
 #
 # Compiles under the strict warning gate, runs the unit tests, and checks that every
 # translation key the code asks for actually exists in every language.

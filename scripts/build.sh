@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Copyright (C) 2026 RedTeam. Licensed under GNU AGPLv3.
+# SPDX-License-Identifier: GPL-3.0-or-later
+# Copyright (C) 2026 AdmiralGDR
 #
 # Builds the mod and hashes the artifact. Archives are configured for reproducible
 # output, so a rebuild from the same sources must produce the same checksum.

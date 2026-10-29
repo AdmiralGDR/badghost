@@ -1,4 +1,5 @@
-// Copyright (C) 2026 RedTeam. Licensed under GNU AGPLv3.
+// SPDX-License-Identifier: GPL-3.0-or-later
+// Copyright (C) 2026 AdmiralGDR
 package red.team.badghost.visuals;
 
 import com.mojang.blaze3d.platform.InputConstants;
